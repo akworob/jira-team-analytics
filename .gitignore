@@ -1,0 +1,16 @@
+# Environment variables with API credentials
+.env
+config.js
+
+# Node modules (if using npm/yarn in the future)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JIRA Scrum Dashboard - Live Analytics</title>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Axios for API calls -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Configuration -->
+    <script src="config.js"></script>
+
+    <style>
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: transform 0.3s;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .project-tab {
+            cursor: pointer;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .project-tab.active {
+            border-bottom-color: white;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .project-tab:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .view-toggle-btn {
+            color: #6b7280;
+            background-color: transparent;
+        }
+
+        .view-toggle-btn.active {
+            color: white;
+            background-color: #3b82f6;
+        }
+
+        .view-toggle-btn:hover:not(.active) {
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Header -->
+    <nav class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    JIRA Scrum Dashboard
+                </h1>
+                <div class="flex items-center space-x-4">
+                    <span id="connectionStatus" class="text-sm">
+                        <i class="fas fa-circle text-red-400 mr-1"></i> Offline
+                    </span>
+                    <button onclick="refreshData()" class="bg-white text-blue-600 px-4 py-2 rounded hover:bg-blue-50">
+                        <i class="fas fa-sync-alt mr-1"></i> Odśwież
+                    </button>
+                </div>
+            </div>
+
+            <!-- Project Tabs -->
+            <div class="flex space-x-2 mt-4">
+                <div class="project-tab px-4 py-2 rounded-t" onclick="switchProject('Inquiries')">
+                    <i class="fas fa-question-circle mr-1"></i> Inquiries
+                </div>
+                <div class="project-tab active px-4 py-2 rounded-t" onclick="switchProject('BESS')">
+                    <i class="fas fa-project-diagram mr-1"></i> BESS
+                </div>
+                <div class="project-tab px-4 py-2 rounded-t" onclick="switchProject('Chargers')">
+                    <i class="fas fa-charging-station mr-1"></i> Chargers
+                </div>
+                <div class="project-tab px-4 py-2 rounded-t" onclick="switchProject('ZEUS')">
+                    <i class="fas fa-bolt mr-1"></i> ZEUS
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container mx-auto px-4 py-6">
+        <!-- Hidden fields to store configuration -->
+        <input type="hidden" id="jiraUrl">
+        <input type="hidden" id="jiraEmail">
+        <input type="hidden" id="jiraToken">
+        <input type="hidden" id="jqlQuery">
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="mb-4 p-4 bg-red-100 text-red-700 rounded-lg hidden"></div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboard" class="hidden fade-in">
+            <!-- View Toggle -->
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-semibold text-gray-700">Widok:</span>
+                        <div class="flex bg-gray-200 rounded-lg p-1">
+                            <button id="sprintViewBtn" onclick="switchView('sprint')"
+                                    class="view-toggle-btn active px-4 py-2 rounded text-sm font-medium transition-colors">
+                                <i class="fas fa-running mr-1"></i> Sprinty
+                            </button>
+                            <button id="monthViewBtn" onclick="switchView('month')"
+                                    class="view-toggle-btn px-4 py-2 rounded text-sm font-medium transition-colors">
+                                <i class="fas fa-calendar-alt mr-1"></i> Miesiące
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        <i class="fas fa-chart-line mr-1"></i>
+                        Grupowanie: <span id="currentViewLabel" class="font-semibold">Sprinty</span>
+                        <span class="ml-4 text-gray-500">|</span>
+                        <span class="ml-4">
+                            <i class="fas fa-database mr-1"></i>
+                            Załadowano: <span id="totalLoadedIssues" class="font-semibold text-blue-600">0</span> issues
+                            w <span id="totalSprintsLoaded" class="font-semibold text-blue-600">0</span> sprintach
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters Section -->
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-filter mr-2 text-gray-600"></i>
+                        <span class="font-semibold text-gray-700">Filtry:</span>
+                    </div>
+
+                    <!-- Sprint Filter (only visible in Sprint view) -->
+                    <div id="sprintFilterContainer" class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Sprinty:</label>
+                        <select id="sprintFilter" class="border rounded px-3 py-1 text-sm" onchange="applyFilters()">
+                            <option value="all">Wszystkie</option>
+                            <option value="1">Ostatni 1</option>
+                            <option value="2">Ostatnie 2</option>
+                            <option value="3">Ostatnie 3</option>
+                            <option value="5">Ostatnie 5</option>
+                            <option value="10">Ostatnie 10</option>
+                        </select>
+                    </div>
+
+                    <!-- Date Range Filter (only visible in Month view) -->
+                    <div id="dateFilterContainer" class="flex items-center gap-2 hidden">
+                        <label class="text-sm text-gray-600">Zakres dat:</label>
+                        <select id="dateRangeFilter" class="border rounded px-3 py-1 text-sm" onchange="applyFilters()">
+                            <option value="all" selected>Wszystkie</option>
+                            <option value="7days">Ostatnie 7 dni</option>
+                            <option value="30days">Ostatnie 30 dni</option>
+                            <option value="60days">Ostatnie 60 dni</option>
+                            <option value="90days">Ostatnie 90 dni</option>
+                            <option value="thisMonth">Bieżący miesiąc</option>
+                            <option value="lastMonth">Poprzedni miesiąc</option>
+                            <option value="thisQuarter">Bieżący kwartał</option>
+                            <option value="custom">Niestandardowy...</option>
+                        </select>
+                    </div>
+
+                    <!-- Custom Date Range -->
+                    <div id="customDateRange" class="flex items-center gap-2 hidden">
+                        <input type="date" id="startDate" class="border rounded px-2 py-1 text-sm">
+                        <span class="text-gray-500">-</span>
+                        <input type="date" id="endDate" class="border rounded px-2 py-1 text-sm">
+                        <button onclick="applyFilters()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+                            Zastosuj
+                        </button>
+                    </div>
+
+                    <!-- Status Filter (always visible) -->
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Status:</label>
+                        <select id="statusFilter" class="border rounded px-3 py-1 text-sm" onchange="applyFilters()">
+                            <option value="all">Wszystkie</option>
+                            <option value="Done" selected>Done</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="To Do">To Do</option>
+                        </select>
+                    </div>
+
+                    <!-- Reset Button -->
+                    <button onclick="resetFilters()" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
+                        <i class="fas fa-redo mr-1"></i> Reset
+                    </button>
+
+                    <!-- Filter Status -->
+                    <div id="filterStatus" class="text-sm text-gray-600 ml-auto">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <span id="filterCount">0</span> issues
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                <div class="metric-card text-white rounded-lg shadow p-6">
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="text-sm opacity-75">Total Story Points</p>
+                            <i class="fas fa-star text-xl opacity-50"></i>
+                        </div>
+                        <p class="text-3xl font-bold" id="totalSP">0</p>
+                        <p class="text-xs opacity-75 mt-1" id="avgSPPerTask">Avg: 0 per task</p>
+                    </div>
+                </div>
+
+                <div class="metric-card text-white rounded-lg shadow p-6">
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="text-sm opacity-75">Zadania</p>
+                            <i class="fas fa-tasks text-xl opacity-50"></i>
+                        </div>
+                        <p class="text-3xl font-bold" id="totalTasks">0</p>
+                        <p class="text-xs opacity-75 mt-1" id="taskBreakdown">0 Done / 0 Total</p>
+                    </div>
+                </div>
+
+                <div class="metric-card text-white rounded-lg shadow p-6">
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="text-sm opacity-75">Completion Rate</p>
+                            <i class="fas fa-check-circle text-xl opacity-50"></i>
+                        </div>
+                        <p class="text-3xl font-bold" id="completionRate">0%</p>
+                        <p class="text-xs opacity-75 mt-1" id="completionTrend">—</p>
+                    </div>
+                </div>
+
+                <div class="metric-card text-white rounded-lg shadow p-6">
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="text-sm opacity-75">Velocity</p>
+                            <i class="fas fa-rocket text-xl opacity-50"></i>
+                        </div>
+                        <p class="text-3xl font-bold" id="avgVelocity">0</p>
+                        <p class="text-xs opacity-75 mt-1" id="velocityLabel">SP per sprint</p>
+                    </div>
+                </div>
+
+                <div class="metric-card text-white rounded-lg shadow p-6">
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="text-sm opacity-75">In Progress</p>
+                            <i class="fas fa-spinner text-xl opacity-50"></i>
+                        </div>
+                        <p class="text-3xl font-bold" id="inProgressCount">0</p>
+                        <p class="text-xs opacity-75 mt-1" id="inProgressSP">0 SP</p>
+                    </div>
+                </div>
+
+                <div class="metric-card text-white rounded-lg shadow p-6">
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="text-sm opacity-75">Zespół</p>
+                            <i class="fas fa-users text-xl opacity-50"></i>
+                        </div>
+                        <p class="text-3xl font-bold" id="teamSize">0</p>
+                        <p class="text-xs opacity-75 mt-1" id="avgSPPerPerson">Avg: 0 SP/person</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section - First Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- User Performance Over Time -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold mb-4">
+                        <i class="fas fa-chart-line mr-2"></i>Wydajność w Czasie
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Sprint Velocity -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold mb-4">
+                        <i class="fas fa-chart-bar mr-2"></i>Sprint Velocity
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="velocityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section - Second Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Closed Issues Count -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold mb-4">
+                        <i class="fas fa-check-square mr-2"></i>Zamknięte Zadania
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="closedIssuesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Closed Issues by User - Full Width -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 class="text-lg font-bold mb-4">
+                    <i class="fas fa-user-check mr-2"></i>Zamknięte Zadania - Użytkownicy
+                </h3>
+                <div class="chart-container">
+                    <canvas id="closedByUserChart"></canvas>
+                </div>
+            </div>
+
+            <!-- User Rankings -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 class="text-lg font-bold mb-4">
+                    <i class="fas fa-trophy mr-2"></i>Ranking Wydajności
+                </h3>
+                <div id="userRankings"></div>
+            </div>
+
+            <!-- Sprint Details Table -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">
+                        <i class="fas fa-table mr-2"></i>Szczegóły Zadań
+                    </h3>
+                    <div class="text-sm text-gray-600">
+                        Wyświetlanie <span id="tableRangeStart">0</span>-<span id="tableRangeEnd">0</span> z <span id="tableTotalIssues">0</span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="px-4 py-2 text-left">Key</th>
+                                <th class="px-4 py-2 text-left">Summary</th>
+                                <th class="px-4 py-2 text-left">Sprint</th>
+                                <th class="px-4 py-2 text-left">Assignee</th>
+                                <th class="px-4 py-2 text-left">Story Points</th>
+                                <th class="px-4 py-2 text-left">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issuesTable">
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Pagination Controls -->
+                <div class="flex items-center justify-between mt-4 pt-4 border-t">
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm text-gray-600">Wierszy na stronę:</label>
+                        <select id="tablePageSize" class="border rounded px-3 py-1 text-sm" onchange="changeTablePageSize()">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="changeTablePage(-1)" id="tablePrevBtn" class="px-3 py-1 border rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-chevron-left"></i> Poprzednia
+                        </button>
+                        <span class="text-sm text-gray-600">
+                            Strona <span id="tableCurrentPage">1</span> z <span id="tableTotalPages">1</span>
+                        </span>
+                        <button onclick="changeTablePage(1)" id="tableNextBtn" class="px-3 py-1 border rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                            Następna <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-8 flex flex-col items-center min-w-[300px]">
+                <div class="loading-spinner mb-4"></div>
+                <p id="loadingMessage" class="text-center">Ładowanie danych...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let jiraData = [];
+        let allJiraData = []; // Store unfiltered data
+        let charts = {};
+        let currentProject = 'BESS';
+        let currentView = 'sprint'; // 'sprint' or 'month'
+
+        // Table pagination state
+        let tablePage = 1;
+        let tablePageSize = 25;
+
+        // Load configuration from config.js
+        window.onload = function() {
+            initConfig();
+
+            // Auto-connect if token is available
+            const savedToken = localStorage.getItem('jiraToken');
+            if (savedToken) {
+                connectToJira();
+            }
+        };
+
+        // Switch between projects
+        function switchProject(projectName) {
+            currentProject = projectName;
+
+            // Update active tab
+            document.querySelectorAll('.project-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.closest('.project-tab').classList.add('active');
+
+            // Ensure configuration is loaded
+            if (!document.getElementById('jiraUrl').value) {
+                initConfig();
+            }
+
+            // Update JQL query
+            const jqlInput = document.getElementById('jqlQuery');
+            jqlInput.value = `project = ${projectName} ORDER BY updated DESC`;
+
+            // Refresh data
+            connectToJira();
+        }
+
+        // Helper function to sort sprints numerically
+        function sortSprints(sprints) {
+            return sprints.sort((a, b) => {
+                // Extract sprint numbers from sprint names
+                // Expected format: "BESS Sprint 11", "Chargers Sprint 5", etc.
+                const getSprintNumber = (sprintName) => {
+                    if (sprintName === 'No Sprint') return -1; // Put "No Sprint" first
+                    const match = sprintName.match(/Sprint (\d+)/i);
+                    return match ? parseInt(match[1]) : 0;
+                };
+
+                const numA = getSprintNumber(a);
+                const numB = getSprintNumber(b);
+
+                return numA - numB;
+            });
+        }
+
+        // Switch between Sprint and Month view
+        function switchView(view) {
+            currentView = view;
+
+            // Update button states
+            document.getElementById('sprintViewBtn').classList.toggle('active', view === 'sprint');
+            document.getElementById('monthViewBtn').classList.toggle('active', view === 'month');
+
+            // Update label
+            document.getElementById('currentViewLabel').textContent = view === 'sprint' ? 'Sprinty' : 'Miesiące';
+            document.getElementById('velocityLabel').textContent = view === 'sprint' ? 'SP per sprint' : 'SP per month';
+
+            // Show/hide appropriate filters based on view
+            const sprintFilterContainer = document.getElementById('sprintFilterContainer');
+            const dateFilterContainer = document.getElementById('dateFilterContainer');
+
+            if (view === 'sprint') {
+                sprintFilterContainer.classList.remove('hidden');
+                dateFilterContainer.classList.add('hidden');
+            } else {
+                sprintFilterContainer.classList.add('hidden');
+                dateFilterContainer.classList.remove('hidden');
+            }
+
+            // Re-render dashboard with new view
+            renderDashboard();
+        }
+
+        // Connect to JIRA with pagination
+        async function connectToJira(skipCache = false) {
+            const url = document.getElementById('jiraUrl').value;
+            const email = document.getElementById('jiraEmail').value;
+            const token = document.getElementById('jiraToken').value;
+            const jql = document.getElementById('jqlQuery').value;
+
+            if (!url || !email || !token) {
+                showError('Wypełnij wszystkie pola konfiguracji');
+                return;
+            }
+
+            // Save configuration
+            localStorage.setItem('jiraUrl', url);
+            localStorage.setItem('jiraEmail', email);
+            localStorage.setItem('jiraToken', token);
+            localStorage.setItem('jqlQuery', jql);
+            saveToken(token);
+
+            // Create cache key based on project
+            const cacheKey = `jiraCache_${currentProject}`;
+            const cacheTimeKey = `jiraCacheTime_${currentProject}`;
+
+            // Check cache if not skipping
+            if (!skipCache) {
+                const cachedData = localStorage.getItem(cacheKey);
+                const cacheTime = localStorage.getItem(cacheTimeKey);
+
+                console.log(`🔍 Cache check for ${currentProject}:`, {
+                    hasCachedData: !!cachedData,
+                    hasCacheTime: !!cacheTime,
+                    cacheKey: cacheKey,
+                    cacheTimeKey: cacheTimeKey
+                });
+
+                if (cachedData && cacheTime) {
+                    const cacheAge = Date.now() - parseInt(cacheTime);
+                    const cacheMaxAge = 5 * 60 * 1000; // 5 minutes
+
+                    console.log(`Cache age: ${Math.round(cacheAge / 1000)}s (max: ${cacheMaxAge / 1000}s)`);
+
+                    if (cacheAge < cacheMaxAge) {
+                        console.log(`✅ Using cached data for ${currentProject} (age: ${Math.round(cacheAge / 1000)}s)`);
+                        try {
+                            const compressedIssues = JSON.parse(cachedData);
+                            // Decompress data back to full format
+                            const issues = compressedIssues.map(ci => ({
+                                key: ci.k,
+                                fields: {
+                                    summary: ci.s,
+                                    status: { name: ci.st },
+                                    assignee: ci.a ? { displayName: ci.a } : null,
+                                    customfield_10016: ci.sp,
+                                    customfield_10020: ci.sr,
+                                    created: ci.c,
+                                    updated: ci.u
+                                }
+                            }));
+                            processJiraData(issues);
+                            updateConnectionStatus(true, true); // true for cached
+                            showError('');
+                            return;
+                        } catch (e) {
+                            console.error('Error parsing cached data:', e);
+                            // Clear corrupted cache
+                            localStorage.removeItem(cacheKey);
+                            localStorage.removeItem(cacheTimeKey);
+                            // Continue to fetch fresh data
+                        }
+                    } else {
+                        console.log(`⏰ Cache expired for ${currentProject} (age: ${Math.round(cacheAge / 1000)}s)`);
+                    }
+                } else {
+                    console.log(`❌ No cache found for ${currentProject}`);
+                }
+            } else {
+                console.log(`⏭️ Skipping cache for ${currentProject} (skipCache=true)`);
+            }
+
+            showLoading(true);
+            updateLoadingMessage('Łączenie z JIRA...');
+
+            try {
+                // Check if running on local server or file protocol
+                const isLocalFile = window.location.protocol === 'file:';
+                const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+                // Fetch all issues with pagination
+                // The /rest/api/3/search/jql endpoint uses nextPageToken pagination
+                let allIssues = [];
+                const maxResults = 100;
+                let nextPageToken = null;
+                let isLast = false;
+                let pageCount = 0;
+
+                while (!isLast) {
+                    pageCount++;
+                    updateLoadingMessage(`Pobieranie strony ${pageCount}... (${allIssues.length} issues załadowanych)`);
+
+                    // Build URL with query parameters
+                    const apiUrl = new URL(`${url}/rest/api/3/search/jql`);
+                    apiUrl.searchParams.append('jql', jql);
+                    apiUrl.searchParams.append('maxResults', maxResults.toString());
+                    if (nextPageToken) {
+                        apiUrl.searchParams.append('nextPageToken', nextPageToken);
+                    }
+                    apiUrl.searchParams.append('fields', 'summary,status,assignee,customfield_10016,customfield_10020,created,updated');
+
+                    let response;
+
+                    if (isLocalServer && !isLocalFile) {
+                        // Use proxy when running on local server
+                        const proxyUrl = `/jira-proxy?url=${encodeURIComponent(apiUrl.toString())}`;
+                        response = await fetch(proxyUrl, {
+                            method: 'GET',
+                            headers: {
+                                'X-JIRA-Auth': 'Basic ' + btoa(email + ':' + token),
+                                'Accept': 'application/json'
+                            }
+                        });
+                    } else {
+                        // Direct connection (may fail due to CORS on file://)
+                        response = await fetch(apiUrl, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': 'Basic ' + btoa(email + ':' + token),
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                    }
+
+                    if (!response.ok) {
+                        let errorData = '';
+                        try {
+                            errorData = await response.text();
+                        } catch (e) {
+                            errorData = 'Unable to read error response';
+                        }
+
+                        let errorMsg = `Błąd połączenia z JIRA: ${response.status}`;
+
+                        if (response.status === 401) {
+                            errorMsg += '\n\nNieautoryzowany - Sprawdź email i API token';
+                        } else if (response.status === 403) {
+                            errorMsg += '\n\nBrak uprawnień - Sprawdź uprawnienia do projektu';
+                        } else if (response.status === 400) {
+                            errorMsg += '\n\nBłędne żądanie - sprawdź JQL query';
+                        } else {
+                            errorMsg += `\n\nDetails: ${errorData}`;
+                        }
+
+                        if (isLocalFile) {
+                            errorMsg += '\n\nCORS Error: Uruchom serwer lokalny używając:\npython3 server.py';
+                        }
+
+                        throw new Error(errorMsg);
+                    }
+
+                    const data = await response.json();
+
+                    if (!data.issues) {
+                        throw new Error('Brak danych issues w odpowiedzi JIRA');
+                    }
+
+                    // Log pagination details
+                    console.log(`Page ${pageCount}: Received ${data.issues.length} issues, isLast=${data.isLast}, hasNextPageToken=${!!data.nextPageToken}`);
+
+                    // Log first and last issue keys
+                    if (data.issues.length > 0) {
+                        console.log(`  First issue: ${data.issues[0].key}, Last issue: ${data.issues[data.issues.length - 1].key}`);
+                    }
+
+                    // Check if we're getting duplicate issues (API might be broken)
+                    if (allIssues.length > 0 && data.issues.length > 0) {
+                        const lastExistingKey = allIssues[allIssues.length - 1].key;
+                        const firstNewKey = data.issues[0].key;
+                        if (lastExistingKey === firstNewKey) {
+                            console.warn('⚠️ Detected duplicate issue - stopping pagination.');
+                            isLast = true;
+                            break;
+                        }
+                    }
+
+                    // Add issues to collection
+                    allIssues = allIssues.concat(data.issues);
+
+                    // Check if there are more pages
+                    // The /rest/api/3/search/jql endpoint returns:
+                    // - issues: array of issues
+                    // - isLast: boolean indicating if this is the last page
+                    // - nextPageToken: token for the next page (if not last)
+                    isLast = data.isLast || data.issues.length === 0;
+                    nextPageToken = data.nextPageToken || null;
+
+                    if (isLast) {
+                        console.log(`✓ Pagination complete: ${allIssues.length} total issues loaded`);
+                    } else {
+                        console.log(`  ➡️ Continuing to next page (has nextPageToken: ${!!nextPageToken})`);
+                    }
+
+                    // Safety limit: don't fetch more than 50 pages (5,000 issues)
+                    if (pageCount >= 50) {
+                        console.warn('⚠️ Reached safety pagination limit of 50 pages (5,000 issues). Stopping to prevent infinite loop.');
+                        break;
+                    }
+                }
+
+                updateLoadingMessage(`Przetwarzanie ${allIssues.length} issues...`);
+
+                // Save to cache with compression (store only essential fields)
+                try {
+                    // Compress data by keeping only essential fields
+                    const compressedIssues = allIssues.map(issue => ({
+                        k: issue.key,
+                        s: issue.fields.summary,
+                        st: issue.fields.status.name,
+                        a: issue.fields.assignee?.displayName || null,
+                        sp: issue.fields.customfield_10016 || 0,
+                        sr: issue.fields.customfield_10020, // Sprint field (raw)
+                        c: issue.fields.created,
+                        u: issue.fields.updated
+                    }));
+
+                    localStorage.setItem(cacheKey, JSON.stringify(compressedIssues));
+                    localStorage.setItem(cacheTimeKey, Date.now().toString());
+                    console.log(`✅ Loaded and cached ${allIssues.length} issues for ${currentProject} (${pageCount} pages)`);
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        console.warn(`⚠️ LocalStorage quota exceeded. Clearing old cache for other projects...`);
+                        // Clear cache for other projects to make space
+                        const otherProjects = ['BESS', 'Chargers', 'Inquiries', 'ZEUS'].filter(p => p !== currentProject);
+                        otherProjects.forEach(project => {
+                            localStorage.removeItem(`jiraCache_${project}`);
+                            localStorage.removeItem(`jiraCacheTime_${project}`);
+                        });
+                        // Try again after clearing
+                        try {
+                            const compressedIssues = allIssues.map(issue => ({
+                                k: issue.key,
+                                s: issue.fields.summary,
+                                st: issue.fields.status.name,
+                                a: issue.fields.assignee?.displayName || null,
+                                sp: issue.fields.customfield_10016 || 0,
+                                sr: issue.fields.customfield_10020,
+                                c: issue.fields.created,
+                                u: issue.fields.updated
+                            }));
+                            localStorage.setItem(cacheKey, JSON.stringify(compressedIssues));
+                            localStorage.setItem(cacheTimeKey, Date.now().toString());
+                            console.log(`✅ Cached after clearing old data`);
+                        } catch (e2) {
+                            console.error('Failed to cache even after clearing:', e2);
+                        }
+                    } else {
+                        console.warn('Failed to cache data:', e);
+                    }
+                }
+
+                processJiraData(allIssues);
+                updateConnectionStatus(true);
+                showError('');
+
+            } catch (error) {
+                console.error('Error connecting to JIRA:', error);
+                console.error('Error details:', {
+                    message: error.message,
+                    name: error.name,
+                    stack: error.stack
+                });
+
+                let errorMessage = 'Błąd: ' + error.message;
+
+                // Check for CORS error
+                if (error.message.includes('Load failed') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+                    errorMessage = '⚠️ CORS Error: Nie można połączyć się z JIRA.\n\n' +
+                                   'Możliwe przyczyny:\n' +
+                                   '1. Serwer proxy nie działa - sprawdź czy python3 server.py jest uruchomiony\n' +
+                                   '2. Problem z połączeniem sieciowym\n' +
+                                   '3. JIRA URL jest nieprawidłowy\n\n' +
+                                   'URL: ' + window.location.href + '\n' +
+                                   'Serwer lokalny: ' + (window.location.hostname === 'localhost' ? 'TAK' : 'NIE');
+                }
+
+                showError(errorMessage);
+                updateConnectionStatus(false);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Process JIRA Data
+        function processJiraData(issues) {
+            allJiraData = issues.map(issue => {
+                // Handle sprint field - customfield_10020 is usually the sprint field
+                let sprintName = 'No Sprint';
+                const sprintField = issue.fields.customfield_10020;
+
+                if (sprintField && Array.isArray(sprintField) && sprintField.length > 0) {
+                    // Get the most recent sprint (last in array)
+                    const lastSprint = sprintField[sprintField.length - 1];
+                    if (typeof lastSprint === 'string') {
+                        // Parse sprint string format
+                        const nameMatch = lastSprint.match(/name=([^,\]]+)/);
+                        if (nameMatch) {
+                            sprintName = nameMatch[1];
+                        }
+                    } else if (lastSprint.name) {
+                        sprintName = lastSprint.name;
+                    }
+                }
+
+                return {
+                    key: issue.key,
+                    summary: issue.fields.summary,
+                    sprint: sprintName,
+                    assignee: issue.fields.assignee?.displayName || 'Unassigned',
+                    storyPoints: issue.fields.customfield_10016 || 0,
+                    status: issue.fields.status.name,
+                    created: issue.fields.created,
+                    updated: issue.fields.updated
+                };
+            });
+
+            // Log sprint information for debugging
+            const sprints = sortSprints([...new Set(allJiraData.map(i => i.sprint))]);
+            console.log(`Total issues loaded: ${allJiraData.length}`);
+            console.log(`Unique sprints found: ${sprints.length}`);
+            console.log('Sprint names:', sprints);
+
+            // Update visible indicators
+            document.getElementById('totalLoadedIssues').textContent = allJiraData.length;
+            document.getElementById('totalSprintsLoaded').textContent = sprints.length;
+
+            // Apply default filters (all statuses, all dates, all sprints)
+            applyFilters();
+        }
+
+        // Apply Filters
+        function applyFilters() {
+            const dateRange = document.getElementById('dateRangeFilter').value;
+            const sprintCount = document.getElementById('sprintFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            // Show/hide custom date range
+            const customDateDiv = document.getElementById('customDateRange');
+            if (dateRange === 'custom') {
+                customDateDiv.classList.remove('hidden');
+                return; // Wait for user to click "Zastosuj"
+            } else {
+                customDateDiv.classList.add('hidden');
+            }
+
+            // Start with all data
+            let filteredData = [...allJiraData];
+
+            // Apply date range filter (only in month view)
+            if (currentView === 'month' && dateRange !== 'all') {
+                const now = new Date();
+                let startDate = null;
+                let endDate = now;
+
+                switch(dateRange) {
+                    case '7days':
+                        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        break;
+                    case '30days':
+                        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        break;
+                    case '60days':
+                        startDate = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+                        break;
+                    case '90days':
+                        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                        break;
+                    case 'thisMonth':
+                        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                        break;
+                    case 'lastMonth':
+                        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                        endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+                        break;
+                    case 'thisQuarter':
+                        const quarter = Math.floor(now.getMonth() / 3);
+                        startDate = new Date(now.getFullYear(), quarter * 3, 1);
+                        break;
+                    case 'custom':
+                        startDate = new Date(document.getElementById('startDate').value);
+                        endDate = new Date(document.getElementById('endDate').value);
+                        break;
+                }
+
+                if (startDate) {
+                    filteredData = filteredData.filter(issue => {
+                        const updatedDate = new Date(issue.updated);
+                        return updatedDate >= startDate && updatedDate <= endDate;
+                    });
+                }
+            }
+
+            // Apply sprint filter (only in sprint view)
+            if (currentView === 'sprint' && sprintCount !== 'all') {
+                // Get unique sprints and sort them numerically, then reverse to get latest sprints
+                const sprints = sortSprints([...new Set(filteredData.map(i => i.sprint))]).reverse();
+                const lastNSprints = sprints.slice(0, parseInt(sprintCount));
+
+                filteredData = filteredData.filter(issue => lastNSprints.includes(issue.sprint));
+            }
+
+            // Apply status filter
+            if (statusFilter !== 'all') {
+                filteredData = filteredData.filter(issue => issue.status === statusFilter);
+            }
+
+            // Update jiraData with filtered results
+            jiraData = filteredData;
+
+            // Reset table pagination to first page
+            tablePage = 1;
+
+            // Re-render dashboard
+            renderDashboard();
+        }
+
+        // Reset Filters
+        function resetFilters() {
+            document.getElementById('dateRangeFilter').value = 'all';
+            document.getElementById('sprintFilter').value = 'all';
+            document.getElementById('statusFilter').value = 'all';
+            document.getElementById('customDateRange').classList.add('hidden');
+
+            jiraData = [...allJiraData];
+            renderDashboard();
+        }
+
+        // Render Dashboard
+        function renderDashboard() {
+            document.getElementById('dashboard').classList.remove('hidden');
+
+            // Calculate basic metrics
+            const totalSP = jiraData.reduce((sum, issue) => sum + (issue.storyPoints || 0), 0);
+            const totalTasks = jiraData.length;
+            const uniqueUsers = [...new Set(jiraData.map(i => i.assignee))];
+
+            // Calculate status-based metrics
+            const doneTasks = jiraData.filter(i => i.status === 'Done');
+            const inProgressTasks = jiraData.filter(i => i.status === 'In Progress');
+            const inProgressSP = inProgressTasks.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+            const completionRate = totalTasks > 0 ? Math.round((doneTasks.length / totalTasks) * 100) : 0;
+
+            // Calculate period-based metrics (sprint or month)
+            let periods;
+            if (currentView === 'sprint') {
+                periods = sortSprints([...new Set(jiraData.map(i => i.sprint))]);
+            } else {
+                // Group by month
+                periods = [...new Set(jiraData.map(i => {
+                    const date = new Date(i.updated);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }))].sort();
+            }
+
+            const avgVelocity = periods.length > 0 ? Math.round(totalSP / periods.length) : 0;
+            const avgSPPerTask = totalTasks > 0 ? (totalSP / totalTasks).toFixed(1) : 0;
+            const avgSPPerPerson = uniqueUsers.length > 0 ? Math.round(totalSP / uniqueUsers.length) : 0;
+
+            // Update filter count
+            const filterCountEl = document.getElementById('filterCount');
+            if (filterCountEl) {
+                const isFiltered = jiraData.length !== allJiraData.length;
+                filterCountEl.textContent = totalTasks;
+                const filterStatus = document.getElementById('filterStatus');
+                if (isFiltered) {
+                    filterStatus.innerHTML = `<i class="fas fa-filter mr-1 text-blue-600"></i>` +
+                        `<span class="font-semibold">${totalTasks}</span> z ${allJiraData.length} issues (filtered)`;
+                } else {
+                    filterStatus.innerHTML = `<i class="fas fa-info-circle mr-1"></i>` +
+                        `<span>${totalTasks}</span> issues`;
+                }
+            }
+
+            // Update metrics cards
+            document.getElementById('totalSP').textContent = totalSP;
+            document.getElementById('avgSPPerTask').textContent = `Avg: ${avgSPPerTask} per task`;
+
+            document.getElementById('totalTasks').textContent = totalTasks;
+            document.getElementById('taskBreakdown').textContent = `${doneTasks.length} Done / ${totalTasks} Total`;
+
+            document.getElementById('completionRate').textContent = `${completionRate}%`;
+            document.getElementById('completionTrend').textContent = completionRate >= 70 ? '✓ Good' : completionRate >= 50 ? '~ Average' : '⚠ Low';
+
+            document.getElementById('avgVelocity').textContent = avgVelocity;
+
+            document.getElementById('inProgressCount').textContent = inProgressTasks.length;
+            document.getElementById('inProgressSP').textContent = `${inProgressSP} SP`;
+
+            document.getElementById('teamSize').textContent = uniqueUsers.length;
+            document.getElementById('avgSPPerPerson').textContent = `Avg: ${avgSPPerPerson} SP/person`;
+
+            // Render charts
+            renderPerformanceChart();
+            renderVelocityChart();
+            renderClosedIssuesChart();
+            renderClosedByUserChart();
+            renderUserRankings();
+            renderIssuesTable();
+        }
+
+        // Render Performance Chart (Line Chart)
+        function renderPerformanceChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+
+            // Prepare periods based on view
+            let periods;
+            if (currentView === 'sprint') {
+                periods = sortSprints([...new Set(jiraData.map(i => i.sprint))]);
+            } else {
+                // Group by month and format nicely
+                periods = [...new Set(jiraData.map(i => {
+                    const date = new Date(i.updated);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }))].sort();
+            }
+
+            const users = [...new Set(jiraData.map(i => i.assignee))];
+
+            const datasets = users.map((user, idx) => {
+                const data = periods.map(period => {
+                    let periodData;
+                    if (currentView === 'sprint') {
+                        periodData = jiraData.filter(i => i.sprint === period && i.assignee === user);
+                    } else {
+                        // Month view
+                        periodData = jiraData.filter(i => {
+                            const date = new Date(i.updated);
+                            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                            return monthKey === period && i.assignee === user;
+                        });
+                    }
+                    return periodData.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+                });
+
+                const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
+
+                return {
+                    label: user,
+                    data: data,
+                    borderColor: colors[idx % colors.length],
+                    backgroundColor: colors[idx % colors.length] + '20',
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                };
+            });
+
+            // Format period labels for display
+            const labels = periods.map(p => {
+                if (currentView === 'month') {
+                    const [year, month] = p.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    return date.toLocaleDateString('pl-PL', { year: 'numeric', month: 'short' });
+                }
+                return p;
+            });
+
+            if (charts.performance) charts.performance.destroy();
+
+            charts.performance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Story Points'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Velocity Chart
+        function renderVelocityChart() {
+            const ctx = document.getElementById('velocityChart').getContext('2d');
+
+            // Prepare periods based on view
+            let periods;
+            if (currentView === 'sprint') {
+                periods = sortSprints([...new Set(jiraData.map(i => i.sprint))]);
+            } else {
+                periods = [...new Set(jiraData.map(i => {
+                    const date = new Date(i.updated);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }))].sort();
+            }
+
+            const velocities = periods.map(period => {
+                let periodData;
+                if (currentView === 'sprint') {
+                    periodData = jiraData.filter(i => i.sprint === period);
+                } else {
+                    periodData = jiraData.filter(i => {
+                        const date = new Date(i.updated);
+                        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        return monthKey === period;
+                    });
+                }
+                return periodData.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+            });
+
+            // Format labels
+            const labels = periods.map(p => {
+                if (currentView === 'month') {
+                    const [year, month] = p.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    return date.toLocaleDateString('pl-PL', { year: 'numeric', month: 'short' });
+                }
+                return p;
+            });
+
+            if (charts.velocity) charts.velocity.destroy();
+
+            charts.velocity = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: currentView === 'sprint' ? 'Sprint Velocity' : 'Monthly Velocity',
+                        data: velocities,
+                        backgroundColor: '#3B82F6',
+                        borderColor: '#2563EB',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Story Points'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Closed Issues Count Chart
+        function renderClosedIssuesChart() {
+            const ctx = document.getElementById('closedIssuesChart').getContext('2d');
+
+            // Get only "Done" issues
+            const closedIssues = jiraData.filter(i => i.status === 'Done');
+
+            // Prepare periods based on view
+            let periods;
+            if (currentView === 'sprint') {
+                periods = sortSprints([...new Set(jiraData.map(i => i.sprint))]);
+            } else {
+                periods = [...new Set(jiraData.map(i => {
+                    const date = new Date(i.updated);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }))].sort();
+            }
+
+            const closedCounts = periods.map(period => {
+                let periodData;
+                if (currentView === 'sprint') {
+                    periodData = closedIssues.filter(i => i.sprint === period);
+                } else {
+                    periodData = closedIssues.filter(i => {
+                        const date = new Date(i.updated);
+                        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                        return monthKey === period;
+                    });
+                }
+                return periodData.length; // Count of closed tasks
+            });
+
+            // Format labels
+            const labels = periods.map(p => {
+                if (currentView === 'month') {
+                    const [year, month] = p.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    return date.toLocaleDateString('pl-PL', { year: 'numeric', month: 'short' });
+                }
+                return p;
+            });
+
+            if (charts.closedIssues) charts.closedIssues.destroy();
+
+            charts.closedIssues = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: currentView === 'sprint' ? 'Zamknięte zadania per sprint' : 'Zamknięte zadania per miesiąc',
+                        data: closedCounts,
+                        backgroundColor: '#10B981',
+                        borderColor: '#059669',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Liczba zadań'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Closed Issues by User Chart (over time)
+        function renderClosedByUserChart() {
+            const ctx = document.getElementById('closedByUserChart').getContext('2d');
+
+            // Get only "Done" issues
+            const closedIssues = jiraData.filter(i => i.status === 'Done');
+
+            // Prepare periods based on view
+            let periods;
+            if (currentView === 'sprint') {
+                periods = sortSprints([...new Set(closedIssues.map(i => i.sprint))]);
+            } else {
+                periods = [...new Set(closedIssues.map(i => {
+                    const date = new Date(i.updated);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }))].sort();
+            }
+
+            const users = [...new Set(closedIssues.map(i => i.assignee))];
+
+            // Create datasets for each user (count of closed tasks)
+            const datasets = users.map((user, idx) => {
+                const data = periods.map(period => {
+                    let periodData;
+                    if (currentView === 'sprint') {
+                        periodData = closedIssues.filter(i => i.sprint === period && i.assignee === user);
+                    } else {
+                        periodData = closedIssues.filter(i => {
+                            const date = new Date(i.updated);
+                            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                            return monthKey === period && i.assignee === user;
+                        });
+                    }
+                    return periodData.length; // Count of tasks
+                });
+
+                const colors = [
+                    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                    '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16'
+                ];
+
+                return {
+                    label: user,
+                    data: data,
+                    borderColor: colors[idx % colors.length],
+                    backgroundColor: colors[idx % colors.length] + '20',
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                };
+            });
+
+            // Format period labels for display
+            const labels = periods.map(p => {
+                if (currentView === 'month') {
+                    const [year, month] = p.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    return date.toLocaleDateString('pl-PL', { year: 'numeric', month: 'short' });
+                }
+                return p;
+            });
+
+            if (charts.closedByUser) charts.closedByUser.destroy();
+
+            charts.closedByUser = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Liczba zamkniętych zadań'
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Team Summary
+        function renderTeamSummary() {
+            const closedIssues = jiraData.filter(i => i.status === 'Done');
+            const totalIssues = jiraData.length;
+            const totalClosed = closedIssues.length;
+            const totalClosedSP = closedIssues.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+            const totalSP = jiraData.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+
+            const inProgressIssues = jiraData.filter(i => i.status === 'In Progress');
+            const todoIssues = jiraData.filter(i => i.status === 'To Do' || (i.status !== 'Done' && i.status !== 'In Progress'));
+
+            const uniqueUsers = [...new Set(jiraData.map(i => i.assignee))].length;
+            const avgClosedPerUser = uniqueUsers > 0 ? (totalClosed / uniqueUsers).toFixed(1) : 0;
+            const avgSPPerUser = uniqueUsers > 0 ? (totalClosedSP / uniqueUsers).toFixed(1) : 0;
+
+            const completionRate = totalIssues > 0 ? Math.round((totalClosed / totalIssues) * 100) : 0;
+
+            const html = `
+                <div class="space-y-3">
+                    <!-- Total Closed -->
+                    <div class="flex items-center justify-between p-4 bg-green-50 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-check-circle text-green-600 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">Zamknięte zadania</p>
+                                <p class="text-2xl font-bold text-green-700">${totalClosed}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm text-gray-600">Story Points</p>
+                            <p class="text-xl font-bold text-green-700">${totalClosedSP}</p>
+                        </div>
+                    </div>
+
+                    <!-- Completion Rate -->
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm text-gray-600">Wskaźnik ukończenia</span>
+                            <span class="text-xl font-bold text-blue-700">${completionRate}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: ${completionRate}%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Team Averages -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="p-3 bg-gray-50 rounded-lg">
+                            <p class="text-xs text-gray-600 mb-1">Średnio na osobę</p>
+                            <p class="text-lg font-bold text-gray-800">${avgClosedPerUser} zadań</p>
+                        </div>
+                        <div class="p-3 bg-gray-50 rounded-lg">
+                            <p class="text-xs text-gray-600 mb-1">Średnio SP/osoba</p>
+                            <p class="text-lg font-bold text-gray-800">${avgSPPerUser} SP</p>
+                        </div>
+                    </div>
+
+                    <!-- Status Breakdown -->
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="p-2 bg-green-50 rounded">
+                            <p class="text-xs text-gray-600">Done</p>
+                            <p class="text-lg font-bold text-green-700">${totalClosed}</p>
+                        </div>
+                        <div class="p-2 bg-blue-50 rounded">
+                            <p class="text-xs text-gray-600">In Progress</p>
+                            <p class="text-lg font-bold text-blue-700">${inProgressIssues.length}</p>
+                        </div>
+                        <div class="p-2 bg-gray-100 rounded">
+                            <p class="text-xs text-gray-600">To Do</p>
+                            <p class="text-lg font-bold text-gray-700">${todoIssues.length}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('teamSummary').innerHTML = html;
+        }
+
+        // Render User Rankings
+        function renderUserRankings() {
+            const users = [...new Set(jiraData.map(i => i.assignee))];
+            
+            const rankings = users.map(user => {
+                const userData = jiraData.filter(i => i.assignee === user);
+                return {
+                    name: user,
+                    tasks: userData.length,
+                    storyPoints: userData.reduce((sum, i) => sum + (i.storyPoints || 0), 0)
+                };
+            }).sort((a, b) => b.storyPoints - a.storyPoints);
+            
+            const html = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    ${rankings.map((user, idx) => `
+                        <div class="border rounded-lg p-4 ${idx === 0 ? 'border-yellow-400 bg-yellow-50' : ''}">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-2xl font-bold">#${idx + 1}</span>
+                                ${idx === 0 ? '<i class="fas fa-crown text-yellow-500 text-2xl"></i>' : ''}
+                            </div>
+                            <p class="font-medium">${user.name}</p>
+                            <div class="mt-2 text-sm">
+                                <p>Story Points: <span class="font-bold text-blue-600">${user.storyPoints}</span></p>
+                                <p>Zadania: <span class="font-bold">${user.tasks}</span></p>
+                                <p>Średnia: <span class="font-bold">${(user.storyPoints / user.tasks).toFixed(1)}</span></p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            document.getElementById('userRankings').innerHTML = html;
+        }
+
+        // Render Issues Table with Pagination
+        function renderIssuesTable() {
+            const totalIssues = jiraData.length;
+            const totalPages = Math.ceil(totalIssues / tablePageSize);
+
+            // Ensure current page is valid
+            if (tablePage > totalPages && totalPages > 0) {
+                tablePage = totalPages;
+            }
+            if (tablePage < 1) {
+                tablePage = 1;
+            }
+
+            // Calculate range
+            const startIndex = (tablePage - 1) * tablePageSize;
+            const endIndex = Math.min(startIndex + tablePageSize, totalIssues);
+            const pageData = jiraData.slice(startIndex, endIndex);
+
+            // Render table rows
+            const html = pageData.map(issue => `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="px-4 py-2 font-mono text-sm">${issue.key}</td>
+                    <td class="px-4 py-2">${issue.summary}</td>
+                    <td class="px-4 py-2">${issue.sprint}</td>
+                    <td class="px-4 py-2">${issue.assignee}</td>
+                    <td class="px-4 py-2 text-center font-bold">${issue.storyPoints || '-'}</td>
+                    <td class="px-4 py-2">
+                        <span class="px-2 py-1 rounded text-xs ${
+                            issue.status === 'Done' ? 'bg-green-100 text-green-800' :
+                            issue.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                        }">
+                            ${issue.status}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('issuesTable').innerHTML = html || '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Brak danych do wyświetlenia</td></tr>';
+
+            // Update pagination info
+            document.getElementById('tableRangeStart').textContent = totalIssues > 0 ? startIndex + 1 : 0;
+            document.getElementById('tableRangeEnd').textContent = endIndex;
+            document.getElementById('tableTotalIssues').textContent = totalIssues;
+            document.getElementById('tableCurrentPage').textContent = totalPages > 0 ? tablePage : 0;
+            document.getElementById('tableTotalPages').textContent = totalPages;
+
+            // Update button states
+            const prevBtn = document.getElementById('tablePrevBtn');
+            const nextBtn = document.getElementById('tableNextBtn');
+            prevBtn.disabled = tablePage <= 1;
+            nextBtn.disabled = tablePage >= totalPages;
+        }
+
+        // Change table page
+        function changeTablePage(direction) {
+            tablePage += direction;
+            renderIssuesTable();
+        }
+
+        // Change table page size
+        function changeTablePageSize() {
+            tablePageSize = parseInt(document.getElementById('tablePageSize').value);
+            tablePage = 1; // Reset to first page
+            renderIssuesTable();
+        }
+
+        // Helper functions
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('hidden', !show);
+        }
+
+        function updateLoadingMessage(message) {
+            const loadingMessageEl = document.getElementById('loadingMessage');
+            if (loadingMessageEl) {
+                loadingMessageEl.textContent = message;
+            }
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            // Preserve line breaks in error messages
+            errorEl.innerHTML = message.replace(/\n/g, '<br>');
+            errorEl.classList.toggle('hidden', !message);
+        }
+
+        function updateConnectionStatus(connected, fromCache = false) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                if (fromCache) {
+                    statusEl.innerHTML = '<i class="fas fa-circle text-yellow-400 mr-1"></i> Online (cache)';
+                    statusEl.title = 'Dane z cache - kliknij Odśwież aby pobrać nowe';
+                } else {
+                    statusEl.innerHTML = '<i class="fas fa-circle text-green-400 mr-1"></i> Online';
+                    statusEl.title = 'Połączono z JIRA';
+                }
+            } else {
+                statusEl.innerHTML = '<i class="fas fa-circle text-red-400 mr-1"></i> Offline';
+                statusEl.title = 'Brak połączenia';
+            }
+        }
+
+        function refreshData() {
+            // Clear cache for current project
+            const cacheKey = `jiraCache_${currentProject}`;
+            const cacheTimeKey = `jiraCacheTime_${currentProject}`;
+            localStorage.removeItem(cacheKey);
+            localStorage.removeItem(cacheTimeKey);
+            console.log(`Cache cleared for ${currentProject}`);
+
+            // Force fresh data fetch (skip cache)
+            connectToJira(true);
+        }
+
+        function clearAllCache() {
+            // Clear cache for all projects
+            const projects = ['Inquiries', 'BESS', 'Chargers', 'ZEUS'];
+            projects.forEach(project => {
+                localStorage.removeItem(`jiraCache_${project}`);
+                localStorage.removeItem(`jiraCacheTime_${project}`);
+            });
+            console.log('All cache cleared');
+        }
+
+        // Clear cache on page load for debugging
+        // clearAllCache(); // Uncomment to force fresh data on every load
+    </script>
+</body>
+</html>
