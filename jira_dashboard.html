@@ -162,7 +162,7 @@
                         <span class="ml-4">
                             <i class="fas fa-database mr-1"></i>
                             Załadowano: <span id="totalLoadedIssues" class="font-semibold text-blue-600">0</span> issues
-                            w <span id="totalSprintsLoaded" class="font-semibold text-blue-600">0</span> sprintach
+                            <span id="sprintCountText">w <span id="totalSprintsLoaded" class="font-semibold text-blue-600">0</span> sprintach</span>
                         </span>
                     </div>
                 </div>
@@ -333,7 +333,17 @@
 
             <!-- Charts Section - Second Row -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <!-- Closed Issues Count -->
+                <!-- Closed Issues by User (Left) -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold mb-4">
+                        <i class="fas fa-user-check mr-2"></i>Zamknięte Zadania - Użytkownicy
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="closedByUserChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Closed Issues Count (Right) -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-bold mb-4">
                         <i class="fas fa-check-square mr-2"></i>Zamknięte Zadania
@@ -341,16 +351,6 @@
                     <div class="chart-container">
                         <canvas id="closedIssuesChart"></canvas>
                     </div>
-                </div>
-            </div>
-
-            <!-- Closed Issues by User - Full Width -->
-            <div class="bg-white rounded-lg shadow p-6 mb-6">
-                <h3 class="text-lg font-bold mb-4">
-                    <i class="fas fa-user-check mr-2"></i>Zamknięte Zadania - Użytkownicy
-                </h3>
-                <div class="chart-container">
-                    <canvas id="closedByUserChart"></canvas>
                 </div>
             </div>
 
@@ -465,6 +465,23 @@
             const jqlInput = document.getElementById('jqlQuery');
             jqlInput.value = `project = ${projectName} ORDER BY updated DESC`;
 
+            // Handle Kanban projects (Inquiries has no sprints)
+            if (projectName === 'Inquiries') {
+                // Switch to Month view for Kanban projects
+                switchView('month');
+                // Disable Sprint view button
+                document.getElementById('sprintViewBtn').disabled = true;
+                document.getElementById('sprintViewBtn').classList.add('opacity-50', 'cursor-not-allowed');
+                // Hide sprint count text
+                document.getElementById('sprintCountText').classList.add('hidden');
+            } else {
+                // Enable Sprint view button for Scrum projects
+                document.getElementById('sprintViewBtn').disabled = false;
+                document.getElementById('sprintViewBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+                // Show sprint count text
+                document.getElementById('sprintCountText').classList.remove('hidden');
+            }
+
             // Refresh data
             connectToJira();
         }
@@ -489,6 +506,11 @@
 
         // Switch between Sprint and Month view
         function switchView(view) {
+            // Don't allow switching to sprint view for Kanban projects
+            if (view === 'sprint' && currentProject === 'Inquiries') {
+                return;
+            }
+
             currentView = view;
 
             // Update button states
