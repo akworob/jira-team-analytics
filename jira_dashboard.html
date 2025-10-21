@@ -354,6 +354,43 @@
                 </div>
             </div>
 
+            <!-- User Statistics Table -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h3 class="text-lg font-bold mb-4">
+                    <i class="fas fa-chart-bar mr-2"></i>Statystyki Użytkowników
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="px-4 py-2 text-left">Użytkownik</th>
+                                <th class="px-4 py-2 text-center">Zadania (Total)</th>
+                                <th class="px-4 py-2 text-center">Zadania (Done)</th>
+                                <th class="px-4 py-2 text-center">% Ukończenia</th>
+                                <th class="px-4 py-2 text-center">SP (Total)</th>
+                                <th class="px-4 py-2 text-center">SP (Done)</th>
+                                <th class="px-4 py-2 text-center">Średnia SP/zadanie</th>
+                                <th class="px-4 py-2 text-center" id="velocityColumnHeader">Velocity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userStatsTable">
+                        </tbody>
+                        <tfoot>
+                            <tr class="bg-blue-50 font-bold border-t-2 border-blue-300">
+                                <td class="px-4 py-3">ZESPÓŁ (Średnia)</td>
+                                <td class="px-4 py-3 text-center" id="teamAvgTasks">-</td>
+                                <td class="px-4 py-3 text-center" id="teamAvgDoneTasks">-</td>
+                                <td class="px-4 py-3 text-center" id="teamAvgCompletion">-</td>
+                                <td class="px-4 py-3 text-center" id="teamAvgSP">-</td>
+                                <td class="px-4 py-3 text-center" id="teamAvgDoneSP">-</td>
+                                <td class="px-4 py-3 text-center" id="teamAvgSPPerTask">-</td>
+                                <td class="px-4 py-3 text-center" id="teamAvgVelocity">-</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
             <!-- User Rankings -->
             <div class="bg-white rounded-lg shadow p-6 mb-6">
                 <h3 class="text-lg font-bold mb-4">
@@ -574,7 +611,7 @@
 
                 if (cachedData && cacheTime) {
                     const cacheAge = Date.now() - parseInt(cacheTime);
-                    const cacheMaxAge = 5 * 60 * 1000; // 5 minutes
+                    const cacheMaxAge = 4 * 60 * 60 * 1000; // 4 hours
 
                     console.log(`Cache age: ${Math.round(cacheAge / 1000)}s (max: ${cacheMaxAge / 1000}s)`);
 
@@ -592,7 +629,8 @@
                                     customfield_10016: ci.sp,
                                     customfield_10020: ci.sr,
                                     created: ci.c,
-                                    updated: ci.u
+                                    updated: ci.u,
+                                    issuetype: { name: ci.it || 'Task' }
                                 }
                             }));
                             processJiraData(issues);
@@ -643,7 +681,7 @@
                     if (nextPageToken) {
                         apiUrl.searchParams.append('nextPageToken', nextPageToken);
                     }
-                    apiUrl.searchParams.append('fields', 'summary,status,assignee,customfield_10016,customfield_10020,created,updated');
+                    apiUrl.searchParams.append('fields', 'summary,status,assignee,customfield_10016,customfield_10020,created,updated,issuetype');
 
                     let response;
 
@@ -758,7 +796,8 @@
                         sp: issue.fields.customfield_10016 || 0,
                         sr: issue.fields.customfield_10020, // Sprint field (raw)
                         c: issue.fields.created,
-                        u: issue.fields.updated
+                        u: issue.fields.updated,
+                        it: issue.fields.issuetype?.name || 'Task' // Issue type
                     }));
 
                     localStorage.setItem(cacheKey, JSON.stringify(compressedIssues));
@@ -783,7 +822,8 @@
                                 sp: issue.fields.customfield_10016 || 0,
                                 sr: issue.fields.customfield_10020,
                                 c: issue.fields.created,
-                                u: issue.fields.updated
+                                u: issue.fields.updated,
+                                it: issue.fields.issuetype?.name || 'Task'
                             }));
                             localStorage.setItem(cacheKey, JSON.stringify(compressedIssues));
                             localStorage.setItem(cacheTimeKey, Date.now().toString());
@@ -830,7 +870,15 @@
 
         // Process JIRA Data
         function processJiraData(issues) {
-            allJiraData = issues.map(issue => {
+            // Filter out Epics - they shouldn't be counted as regular tasks
+            const filteredIssues = issues.filter(issue => {
+                const issueType = issue.fields.issuetype?.name || '';
+                return issueType.toLowerCase() !== 'epic';
+            });
+
+            console.log(`Filtered out ${issues.length - filteredIssues.length} epics. Processing ${filteredIssues.length} issues.`);
+
+            allJiraData = filteredIssues.map(issue => {
                 // Handle sprint field - customfield_10020 is usually the sprint field
                 let sprintName = 'No Sprint';
                 const sprintField = issue.fields.customfield_10020;
@@ -1041,6 +1089,7 @@
             renderVelocityChart();
             renderClosedIssuesChart();
             renderClosedByUserChart();
+            renderUserStatsTable();
             renderUserRankings();
             renderIssuesTable();
         }
@@ -1451,6 +1500,99 @@
             `;
 
             document.getElementById('teamSummary').innerHTML = html;
+        }
+
+        // Render User Statistics Table
+        function renderUserStatsTable() {
+            const users = [...new Set(jiraData.map(i => i.assignee))];
+
+            // Update velocity column header based on view
+            const velocityHeader = currentView === 'sprint' ? 'Velocity (SP/sprint)' : 'Velocity (SP/miesiąc)';
+            document.getElementById('velocityColumnHeader').textContent = velocityHeader;
+
+            // Calculate periods for velocity
+            let periods;
+            if (currentView === 'sprint') {
+                periods = sortSprints([...new Set(jiraData.map(i => i.sprint))]);
+            } else {
+                periods = [...new Set(jiraData.map(i => {
+                    const date = new Date(i.updated);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }))].sort();
+            }
+            const periodCount = periods.length || 1;
+
+            // Calculate stats for each user
+            const userStats = users.map(user => {
+                const userIssues = jiraData.filter(i => i.assignee === user);
+                const userDoneIssues = userIssues.filter(i => i.status === 'Done');
+
+                const totalTasks = userIssues.length;
+                const doneTasks = userDoneIssues.length;
+                const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+                const totalSP = userIssues.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+                const doneSP = userDoneIssues.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+                const avgSPPerTask = totalTasks > 0 ? (totalSP / totalTasks).toFixed(1) : 0;
+                const velocity = (doneSP / periodCount).toFixed(1);
+
+                return {
+                    user,
+                    totalTasks,
+                    doneTasks,
+                    completionRate,
+                    totalSP,
+                    doneSP,
+                    avgSPPerTask,
+                    velocity: parseFloat(velocity)
+                };
+            }).sort((a, b) => b.doneSP - a.doneSP); // Sort by done SP descending
+
+            // Render table rows
+            const html = userStats.map((stats, idx) => {
+                const completionColor =
+                    stats.completionRate >= 80 ? 'text-green-600' :
+                    stats.completionRate >= 50 ? 'text-yellow-600' :
+                    'text-red-600';
+
+                return `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2">
+                            <div class="flex items-center">
+                                <span class="font-medium">${stats.user}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-2 text-center">${stats.totalTasks}</td>
+                        <td class="px-4 py-2 text-center font-semibold text-green-600">${stats.doneTasks}</td>
+                        <td class="px-4 py-2 text-center ${completionColor} font-semibold">${stats.completionRate}%</td>
+                        <td class="px-4 py-2 text-center">${stats.totalSP}</td>
+                        <td class="px-4 py-2 text-center font-semibold text-blue-600">${stats.doneSP}</td>
+                        <td class="px-4 py-2 text-center">${stats.avgSPPerTask}</td>
+                        <td class="px-4 py-2 text-center font-semibold">${stats.velocity}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('userStatsTable').innerHTML = html;
+
+            // Calculate team averages
+            if (userStats.length > 0) {
+                const avgTasks = (userStats.reduce((sum, s) => sum + s.totalTasks, 0) / userStats.length).toFixed(1);
+                const avgDoneTasks = (userStats.reduce((sum, s) => sum + s.doneTasks, 0) / userStats.length).toFixed(1);
+                const avgCompletion = Math.round(userStats.reduce((sum, s) => sum + s.completionRate, 0) / userStats.length);
+                const avgSP = (userStats.reduce((sum, s) => sum + s.totalSP, 0) / userStats.length).toFixed(1);
+                const avgDoneSP = (userStats.reduce((sum, s) => sum + s.doneSP, 0) / userStats.length).toFixed(1);
+                const avgSPPerTask = (userStats.reduce((sum, s) => sum + parseFloat(s.avgSPPerTask), 0) / userStats.length).toFixed(1);
+                const avgVelocity = (userStats.reduce((sum, s) => sum + s.velocity, 0) / userStats.length).toFixed(1);
+
+                document.getElementById('teamAvgTasks').textContent = avgTasks;
+                document.getElementById('teamAvgDoneTasks').textContent = avgDoneTasks;
+                document.getElementById('teamAvgCompletion').textContent = avgCompletion + '%';
+                document.getElementById('teamAvgSP').textContent = avgSP;
+                document.getElementById('teamAvgDoneSP').textContent = avgDoneSP;
+                document.getElementById('teamAvgSPPerTask').textContent = avgSPPerTask;
+                document.getElementById('teamAvgVelocity').textContent = avgVelocity;
+            }
         }
 
         // Render User Rankings
