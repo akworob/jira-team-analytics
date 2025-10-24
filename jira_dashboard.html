@@ -108,20 +108,9 @@
                 </div>
             </div>
 
-            <!-- Project Tabs -->
+            <!-- Project Tabs (dynamically generated) -->
             <div class="flex space-x-2 mt-4">
-                <div class="project-tab px-4 py-2 rounded-t" onclick="switchProject('Inquiries')">
-                    <i class="fas fa-question-circle mr-1"></i> Inquiries
-                </div>
-                <div class="project-tab active px-4 py-2 rounded-t" onclick="switchProject('BESS')">
-                    <i class="fas fa-project-diagram mr-1"></i> BESS
-                </div>
-                <div class="project-tab px-4 py-2 rounded-t" onclick="switchProject('Chargers')">
-                    <i class="fas fa-charging-station mr-1"></i> Chargers
-                </div>
-                <div class="project-tab px-4 py-2 rounded-t" onclick="switchProject('ZEUS')">
-                    <i class="fas fa-bolt mr-1"></i> ZEUS
-                </div>
+                <!-- Tabs will be generated dynamically by renderProjectTabs() -->
             </div>
         </div>
     </nav>
@@ -485,8 +474,10 @@
         let jiraData = [];
         let allJiraData = []; // Store unfiltered data
         let charts = {};
-        let currentProject = 'BESS';
+        let currentProject = null; // Will be set dynamically
         let currentView = 'sprint'; // 'sprint' or 'month'
+        let availableProjects = []; // Store fetched projects with their board types
+        let projectBoards = {}; // Map project keys to board info
 
         // Table pagination state
         let tablePage = 1;
@@ -499,19 +490,328 @@
             // Auto-connect if token is available
             const savedToken = localStorage.getItem('jiraToken');
             if (savedToken) {
-                connectToJira();
+                initializeProjects();
             }
         };
 
+        // Initialize: Fetch projects and boards, then set up UI
+        async function initializeProjects() {
+            try {
+                // Check if we already have projects cached
+                const cachedProjects = localStorage.getItem('jiraProjects');
+                const cacheTime = localStorage.getItem('jiraProjectsTime');
+
+                if (cachedProjects && cacheTime) {
+                    const age = Date.now() - parseInt(cacheTime);
+                    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+                    if (age < maxAge) {
+                        console.log('✅ Using cached project list');
+                        availableProjects = JSON.parse(cachedProjects);
+                        availableProjects.forEach(p => {
+                            projectBoards[p.key] = {
+                                type: p.boardType,
+                                boards: p.boards
+                            };
+                        });
+                        renderProjectTabs();
+
+                        if (availableProjects.length > 0) {
+                            currentProject = availableProjects[0].key;
+                            connectToJira();
+                        }
+                        return;
+                    }
+                }
+
+                showLoading(true);
+                updateLoadingMessage('Inicjalizacja - pobieranie projektów...');
+
+                await fetchProjectsAndBoards();
+
+                // Cache the results
+                try {
+                    localStorage.setItem('jiraProjects', JSON.stringify(availableProjects));
+                    localStorage.setItem('jiraProjectsTime', Date.now().toString());
+                    console.log('✅ Cached project list');
+                } catch (e) {
+                    console.warn('Could not cache project list:', e);
+                }
+
+                renderProjectTabs();
+
+                // Set first project as current
+                if (availableProjects.length > 0) {
+                    currentProject = availableProjects[0].key;
+                    connectToJira();
+                } else {
+                    showError('Nie znaleziono żadnych projektów dostępnych dla tego użytkownika.');
+                    showLoading(false);
+                }
+            } catch (error) {
+                console.error('❌ Error initializing projects:', error);
+                showError('Błąd podczas inicjalizacji: ' + error.message);
+                showLoading(false);
+            }
+        }
+
+        // Fetch all accessible projects and their boards
+        async function fetchProjectsAndBoards() {
+            const url = document.getElementById('jiraUrl').value;
+            const email = document.getElementById('jiraEmail').value;
+            const token = document.getElementById('jiraToken').value;
+
+            if (!url || !email || !token) {
+                throw new Error('Missing Jira configuration');
+            }
+
+            const isLocalServer = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isLocalFile = window.location.protocol === 'file:';
+
+            // Clear any existing projects
+            availableProjects = [];
+            projectBoards = {};
+
+            // Fetch all projects
+            const projectsUrl = `${url}/rest/api/3/project`;
+            let projectsResponse;
+
+            if (isLocalServer && !isLocalFile) {
+                const proxyUrl = `/jira-proxy?url=${encodeURIComponent(projectsUrl)}`;
+                projectsResponse = await fetch(proxyUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-JIRA-Auth': 'Basic ' + btoa(email + ':' + token),
+                        'Accept': 'application/json'
+                    }
+                });
+            } else {
+                projectsResponse = await fetch(projectsUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa(email + ':' + token),
+                        'Accept': 'application/json'
+                    }
+                });
+            }
+
+            if (!projectsResponse.ok) {
+                throw new Error(`Failed to fetch projects: ${projectsResponse.status}`);
+            }
+
+            const projects = await projectsResponse.json();
+            console.log(`Found ${projects.length} projects`);
+
+            // For each project, fetch its boards to determine type
+            for (let i = 0; i < projects.length; i++) {
+                const project = projects[i];
+
+                try {
+                    updateLoadingMessage(`Sprawdzanie typu projektu: ${project.name}... (${i + 1}/${projects.length})`);
+
+                    console.log(`\nProject ${project.key}:`, {
+                        name: project.name,
+                        style: project.style,
+                        projectTypeKey: project.projectTypeKey
+                    });
+
+                    const boardsUrl = `${url}/rest/agile/1.0/board?projectKeyOrId=${project.key}`;
+                    let boardsResponse;
+
+                    if (isLocalServer && !isLocalFile) {
+                        const proxyUrl = `/jira-proxy?url=${encodeURIComponent(boardsUrl)}`;
+                        boardsResponse = await fetch(proxyUrl, {
+                            method: 'GET',
+                            headers: {
+                                'X-JIRA-Auth': 'Basic ' + btoa(email + ':' + token),
+                                'Accept': 'application/json'
+                            }
+                        });
+                    } else {
+                        boardsResponse = await fetch(boardsUrl, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': 'Basic ' + btoa(email + ':' + token),
+                                'Accept': 'application/json'
+                            }
+                        });
+                    }
+
+                    if (boardsResponse.ok) {
+                        const boardsData = await boardsResponse.json();
+                        const boards = boardsData.values || [];
+
+                        // Determine board type (scrum or kanban)
+                        let boardType = 'kanban'; // default to kanban
+
+                        if (boards.length > 0) {
+                            // Log board details for debugging
+                            console.log(`  Boards found:`, boards.map(b => ({
+                                id: b.id,
+                                name: b.name,
+                                type: b.type
+                            })));
+
+                            // For 'simple' type boards (next-gen/team-managed projects),
+                            // we need to check the board configuration to see if it uses sprints
+                            // For now, check if board type is explicitly 'scrum'
+                            const scrumBoard = boards.find(b => b.type === 'scrum');
+
+                            if (scrumBoard) {
+                                boardType = 'scrum';
+                                console.log(`  → Detected as SCRUM (found scrum board: "${scrumBoard.name}")`);
+                            } else {
+                                // All boards are 'simple' or 'kanban' - need to check board config
+                                // Try to fetch the first board's configuration to check for sprint support
+                                const firstBoard = boards[0];
+                                try {
+                                    const configUrl = `${url}/rest/agile/1.0/board/${firstBoard.id}/configuration`;
+                                    let configResponse;
+
+                                    if (isLocalServer && !isLocalFile) {
+                                        const proxyUrl = `/jira-proxy?url=${encodeURIComponent(configUrl)}`;
+                                        configResponse = await fetch(proxyUrl, {
+                                            method: 'GET',
+                                            headers: {
+                                                'X-JIRA-Auth': 'Basic ' + btoa(email + ':' + token),
+                                                'Accept': 'application/json'
+                                            }
+                                        });
+                                    } else {
+                                        configResponse = await fetch(configUrl, {
+                                            method: 'GET',
+                                            headers: {
+                                                'Authorization': 'Basic ' + btoa(email + ':' + token),
+                                                'Accept': 'application/json'
+                                            }
+                                        });
+                                    }
+
+                                    if (configResponse.ok) {
+                                        const config = await configResponse.json();
+                                        // Check if board has sprint support enabled
+                                        // The 'estimation' or 'ranking' fields indicate features
+                                        const hasSprintFeature = config.type === 'scrum' ||
+                                                               (config.features && config.features.sprintsEnabled);
+
+                                        if (hasSprintFeature) {
+                                            boardType = 'scrum';
+                                            console.log(`  → Detected as SCRUM (board config shows sprint support)`);
+                                        } else {
+                                            boardType = 'kanban';
+                                            console.log(`  → Detected as KANBAN (board config shows no sprint support)`);
+                                        }
+                                        console.log(`    Config:`, config);
+                                    } else {
+                                        // Couldn't fetch config, check if it's a simple board which typically means Scrum
+                                        const hasSimpleBoard = boards.find(b => b.type === 'simple');
+                                        if (hasSimpleBoard) {
+                                            // Default 'simple' boards to scrum unless we know otherwise
+                                            boardType = 'scrum';
+                                            console.log(`  → Defaulting to SCRUM (type: simple, couldn't verify config)`);
+                                        } else {
+                                            boardType = 'kanban';
+                                            console.log(`  → Defaulting to KANBAN (couldn't verify config)`);
+                                        }
+                                    }
+                                } catch (configError) {
+                                    console.warn(`  ⚠️ Could not fetch board config:`, configError);
+                                    // Default to scrum for 'simple' boards
+                                    boardType = firstBoard.type === 'simple' ? 'scrum' : 'kanban';
+                                    console.log(`  → Defaulting to ${boardType.toUpperCase()} based on board type`);
+                                }
+                            }
+                        } else {
+                            console.log(`  → No boards found, defaulting to KANBAN`);
+                        }
+
+                        availableProjects.push({
+                            key: project.key,
+                            name: project.name,
+                            boardType: boardType,
+                            boards: boards
+                        });
+
+                        projectBoards[project.key] = {
+                            type: boardType,
+                            boards: boards
+                        };
+
+                        console.log(`✓ ${project.key} (${project.name}): ${boardType.toUpperCase()} - ${boards.length} board(s)`);
+                    } else {
+                        // Board API call failed, add project as kanban
+                        console.warn(`⚠️ Could not fetch boards for ${project.key} (status: ${boardsResponse.status}), defaulting to KANBAN`);
+                        availableProjects.push({
+                            key: project.key,
+                            name: project.name,
+                            boardType: 'kanban',
+                            boards: []
+                        });
+
+                        projectBoards[project.key] = {
+                            type: 'kanban',
+                            boards: []
+                        };
+                    }
+                } catch (error) {
+                    console.error(`❌ Error fetching boards for project ${project.key}:`, error);
+                    // Add project anyway, assume kanban
+                    availableProjects.push({
+                        key: project.key,
+                        name: project.name,
+                        boardType: 'kanban',
+                        boards: []
+                    });
+
+                    projectBoards[project.key] = {
+                        type: 'kanban',
+                        boards: []
+                    };
+                }
+            }
+
+            console.log(`\n📊 Finished loading ${availableProjects.length} projects:`, availableProjects.map(p => `${p.key} (${p.boardType})`));
+        }
+
+        // Render project tabs dynamically
+        function renderProjectTabs() {
+            const tabsContainer = document.querySelector('.flex.space-x-2.mt-4');
+            if (!tabsContainer) return;
+
+            // Clear existing tabs
+            tabsContainer.innerHTML = '';
+
+            // Create tabs for each project
+            availableProjects.forEach((project, index) => {
+                const tab = document.createElement('div');
+                tab.className = `project-tab px-4 py-2 rounded-t ${index === 0 ? 'active' : ''}`;
+                tab.setAttribute('data-project-key', project.key);
+                tab.onclick = () => switchProject(project.key);
+
+                // Choose icon based on board type
+                const icon = project.boardType === 'scrum' ?
+                    '<i class="fas fa-project-diagram mr-1" title="Scrum"></i>' :
+                    '<i class="fas fa-stream mr-1" title="Kanban"></i>';
+
+                tab.innerHTML = `${icon} ${project.name} <span class="text-xs opacity-60">(${project.key})</span>`;
+                tab.title = `${project.name} - ${project.boardType}`;
+                tabsContainer.appendChild(tab);
+            });
+
+            console.log(`Rendered ${availableProjects.length} project tabs`);
+        }
+
         // Switch between projects
-        function switchProject(projectName) {
-            currentProject = projectName;
+        function switchProject(projectKey) {
+            currentProject = projectKey;
 
             // Update active tab
             document.querySelectorAll('.project-tab').forEach(tab => {
                 tab.classList.remove('active');
+                if (tab.getAttribute('data-project-key') === projectKey) {
+                    tab.classList.add('active');
+                }
             });
-            event.target.closest('.project-tab').classList.add('active');
 
             // Ensure configuration is loaded
             if (!document.getElementById('jiraUrl').value) {
@@ -519,22 +819,40 @@
             }
 
             // Update JQL query
+            // Use quotes around project key to handle special cases like "IN" which is a JQL keyword
             const jqlInput = document.getElementById('jqlQuery');
-            jqlInput.value = `project = ${projectName} ORDER BY updated DESC`;
+            jqlInput.value = `project = "${projectKey}" ORDER BY updated DESC`;
 
-            // Handle Kanban projects (Inquiries has no sprints)
-            if (projectName === 'Inquiries') {
+            // Get project info
+            const projectInfo = availableProjects.find(p => p.key === projectKey);
+            const boardType = projectInfo ? projectInfo.boardType : 'kanban';
+
+            console.log(`🔄 Switching to project: ${projectKey}`);
+            console.log(`  - Project info:`, projectInfo);
+            console.log(`  - Board type: ${boardType}`);
+            console.log(`  - JQL: project = "${projectKey}" ORDER BY updated DESC`);
+
+            // Handle board type specific UI
+            if (boardType === 'kanban') {
+                console.log('  ⚠️ Kanban board detected - disabling sprint view');
                 // Switch to Month view for Kanban projects
-                switchView('month');
+                if (currentView === 'sprint') {
+                    switchView('month');
+                }
                 // Disable Sprint view button
-                document.getElementById('sprintViewBtn').disabled = true;
-                document.getElementById('sprintViewBtn').classList.add('opacity-50', 'cursor-not-allowed');
+                const sprintBtn = document.getElementById('sprintViewBtn');
+                sprintBtn.disabled = true;
+                sprintBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                sprintBtn.onclick = null; // Remove click handler
                 // Hide sprint count text
                 document.getElementById('sprintCountText').classList.add('hidden');
             } else {
+                console.log('  ✓ Scrum board detected - enabling sprint view');
                 // Enable Sprint view button for Scrum projects
-                document.getElementById('sprintViewBtn').disabled = false;
-                document.getElementById('sprintViewBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+                const sprintBtn = document.getElementById('sprintViewBtn');
+                sprintBtn.disabled = false;
+                sprintBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                sprintBtn.onclick = () => switchView('sprint'); // Re-enable click handler
                 // Show sprint count text
                 document.getElementById('sprintCountText').classList.remove('hidden');
             }
@@ -564,10 +882,16 @@
         // Switch between Sprint and Month view
         function switchView(view) {
             // Don't allow switching to sprint view for Kanban projects
-            if (view === 'sprint' && currentProject === 'Inquiries') {
+            const projectInfo = availableProjects.find(p => p.key === currentProject);
+            const boardType = projectInfo ? projectInfo.boardType : 'kanban';
+
+            if (view === 'sprint' && boardType === 'kanban') {
+                console.log('❌ Cannot switch to sprint view - this is a Kanban project');
+                alert('Ten projekt jest typu Kanban i nie wspiera widoku sprintów. Użyj widoku miesięcy.');
                 return;
             }
 
+            console.log(`Switching view to: ${view}`);
             currentView = view;
 
             // Update button states
@@ -743,6 +1067,8 @@
                             errorMsg += '\n\nBrak uprawnień - Sprawdź uprawnienia do projektu';
                         } else if (response.status === 400) {
                             errorMsg += '\n\nBłędne żądanie - sprawdź JQL query';
+                            errorMsg += `\n\nJQL: ${jql}`;
+                            errorMsg += `\n\nDetails: ${errorData}`;
                         } else {
                             errorMsg += `\n\nDetails: ${errorData}`;
                         }
@@ -934,6 +1260,55 @@
             console.log(`Total issues loaded: ${allJiraData.length}`);
             console.log(`Unique sprints found: ${sprints.length}`);
             console.log('Sprint names:', sprints);
+
+            // Check if this project actually uses sprints
+            // If all issues are "No Sprint" or only 1 sprint exists and it's "No Sprint", it's really a Kanban board
+            const hasRealSprints = sprints.length > 1 || (sprints.length === 1 && sprints[0] !== 'No Sprint');
+
+            if (!hasRealSprints) {
+                console.log('⚠️ No real sprints found - this appears to be a Kanban board despite configuration');
+
+                // Update project board type
+                const projectInfo = availableProjects.find(p => p.key === currentProject);
+                if (projectInfo && projectInfo.boardType === 'scrum') {
+                    console.log(`  Updating ${currentProject} from scrum to kanban based on sprint data`);
+                    projectInfo.boardType = 'kanban';
+                    if (projectBoards[currentProject]) {
+                        projectBoards[currentProject].type = 'kanban';
+                    }
+
+                    // Update cache
+                    try {
+                        localStorage.setItem('jiraProjects', JSON.stringify(availableProjects));
+                    } catch (e) {
+                        console.warn('Could not update cached project type');
+                    }
+
+                    // Switch to month view and disable sprint view
+                    if (currentView === 'sprint') {
+                        currentView = 'month';
+                    }
+                    const sprintBtn = document.getElementById('sprintViewBtn');
+                    sprintBtn.disabled = true;
+                    sprintBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    document.getElementById('sprintCountText').classList.add('hidden');
+
+                    // Update view toggle state
+                    document.getElementById('sprintViewBtn').classList.remove('active');
+                    document.getElementById('monthViewBtn').classList.add('active');
+
+                    // Update tab icon to reflect Kanban
+                    const currentTab = document.querySelector(`.project-tab[data-project-key="${currentProject}"]`);
+                    if (currentTab) {
+                        const icon = currentTab.querySelector('i');
+                        if (icon) {
+                            icon.className = 'fas fa-stream mr-1';
+                            icon.title = 'Kanban';
+                        }
+                        currentTab.title = `${projectInfo.name} - kanban (auto-detected)`;
+                    }
+                }
+            }
 
             // Update visible indicators
             document.getElementById('totalLoadedIssues').textContent = allJiraData.length;
@@ -1780,10 +2155,17 @@
             const cacheTimeKey = `jiraCacheTime_${currentProject}`;
             localStorage.removeItem(cacheKey);
             localStorage.removeItem(cacheTimeKey);
+
+            // Also clear project list cache to re-detect board types
+            localStorage.removeItem('jiraProjects');
+            localStorage.removeItem('jiraProjectsTime');
+
             console.log(`Cache cleared for ${currentProject}`);
 
-            // Force fresh data fetch (skip cache)
-            connectToJira(true);
+            // Reinitialize projects to refresh board types
+            availableProjects = [];
+            projectBoards = {};
+            initializeProjects();
         }
 
         function clearAllCache() {

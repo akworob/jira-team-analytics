@@ -5,7 +5,7 @@ const CONFIG = {
     JIRA_URL: 'https://your-domain.atlassian.net/',
     JIRA_EMAIL: 'your-email@example.com',
     JIRA_API_TOKEN: 'your-api-token-here',
-    JQL_QUERY: 'project = YOURPROJECT ORDER BY updated DESC'
+    JQL_QUERY: 'project = "YOURPROJECT" ORDER BY updated DESC'
 };
 
 // Load configuration from localStorage if available
