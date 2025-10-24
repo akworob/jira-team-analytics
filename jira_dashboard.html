@@ -87,6 +87,11 @@
         .view-toggle-btn:hover:not(.active) {
             background-color: rgba(59, 130, 246, 0.1);
         }
+
+        .lang-btn.active {
+            background-color: rgba(255, 255, 255, 0.3);
+            font-size: 1.2em;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -99,11 +104,23 @@
                     JIRA Scrum Dashboard
                 </h1>
                 <div class="flex items-center space-x-4">
+                    <!-- Language Switcher -->
+                    <div class="flex items-center space-x-1 bg-white bg-opacity-20 rounded px-2 py-1">
+                        <button class="lang-btn px-2 py-1 rounded text-sm transition-colors hover:bg-white hover:bg-opacity-20"
+                                data-lang="pl" onclick="setLanguage('pl')" title="Polski">
+                            🇵🇱
+                        </button>
+                        <button class="lang-btn px-2 py-1 rounded text-sm transition-colors hover:bg-white hover:bg-opacity-20"
+                                data-lang="en" onclick="setLanguage('en')" title="English">
+                            🇬🇧
+                        </button>
+                    </div>
+
                     <span id="connectionStatus" class="text-sm">
-                        <i class="fas fa-circle text-red-400 mr-1"></i> Offline
+                        <i class="fas fa-circle text-red-400 mr-1"></i> <span data-i18n="offline">Offline</span>
                     </span>
                     <button onclick="refreshData()" class="bg-white text-blue-600 px-4 py-2 rounded hover:bg-blue-50">
-                        <i class="fas fa-sync-alt mr-1"></i> Odśwież
+                        <i class="fas fa-sync-alt mr-1"></i> <span data-i18n="refresh">Odśwież</span>
                     </button>
                 </div>
             </div>
@@ -132,26 +149,26 @@
             <div class="bg-white rounded-lg shadow p-4 mb-6">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-4">
-                        <span class="text-sm font-semibold text-gray-700">Widok:</span>
+                        <span class="text-sm font-semibold text-gray-700" data-i18n="view">Widok:</span>
                         <div class="flex bg-gray-200 rounded-lg p-1">
                             <button id="sprintViewBtn" onclick="switchView('sprint')"
                                     class="view-toggle-btn active px-4 py-2 rounded text-sm font-medium transition-colors">
-                                <i class="fas fa-running mr-1"></i> Sprinty
+                                <i class="fas fa-running mr-1"></i> <span data-i18n="sprints">Sprinty</span>
                             </button>
                             <button id="monthViewBtn" onclick="switchView('month')"
                                     class="view-toggle-btn px-4 py-2 rounded text-sm font-medium transition-colors">
-                                <i class="fas fa-calendar-alt mr-1"></i> Miesiące
+                                <i class="fas fa-calendar-alt mr-1"></i> <span data-i18n="months">Miesiące</span>
                             </button>
                         </div>
                     </div>
                     <div class="text-sm text-gray-600">
                         <i class="fas fa-chart-line mr-1"></i>
-                        Grupowanie: <span id="currentViewLabel" class="font-semibold">Sprinty</span>
+                        <span data-i18n="grouping">Grupowanie:</span> <span id="currentViewLabel" class="font-semibold"><span data-i18n="sprints">Sprinty</span></span>
                         <span class="ml-4 text-gray-500">|</span>
                         <span class="ml-4">
                             <i class="fas fa-database mr-1"></i>
-                            Załadowano: <span id="totalLoadedIssues" class="font-semibold text-blue-600">0</span> issues
-                            <span id="sprintCountText">w <span id="totalSprintsLoaded" class="font-semibold text-blue-600">0</span> sprintach</span>
+                            <span data-i18n="loaded">Załadowano:</span> <span id="totalLoadedIssues" class="font-semibold text-blue-600">0</span> <span data-i18n="issues">issues</span>
+                            <span id="sprintCountText"><span data-i18n="in">w</span> <span id="totalSprintsLoaded" class="font-semibold text-blue-600">0</span> <span data-i18n="sprintsCount">sprintach</span></span>
                         </span>
                     </div>
                 </div>
@@ -162,35 +179,35 @@
                 <div class="flex flex-wrap items-center gap-4">
                     <div class="flex items-center">
                         <i class="fas fa-filter mr-2 text-gray-600"></i>
-                        <span class="font-semibold text-gray-700">Filtry:</span>
+                        <span class="font-semibold text-gray-700" data-i18n="filters">Filtry:</span>
                     </div>
 
                     <!-- Sprint Filter (only visible in Sprint view) -->
                     <div id="sprintFilterContainer" class="flex items-center gap-2">
-                        <label class="text-sm text-gray-600">Sprinty:</label>
+                        <label class="text-sm text-gray-600"><span data-i18n="sprintsLabel">Sprinty:</span></label>
                         <select id="sprintFilter" class="border rounded px-3 py-1 text-sm" onchange="applyFilters()">
-                            <option value="all">Wszystkie</option>
-                            <option value="1">Ostatni 1</option>
-                            <option value="2">Ostatnie 2</option>
-                            <option value="3">Ostatnie 3</option>
-                            <option value="5">Ostatnie 5</option>
-                            <option value="10">Ostatnie 10</option>
+                            <option value="all" data-i18n="all">Wszystkie</option>
+                            <option value="1"><span data-i18n="last">Ostatni</span> 1</option>
+                            <option value="2"><span data-i18n="last">Ostatnie</span> 2</option>
+                            <option value="3"><span data-i18n="last">Ostatnie</span> 3</option>
+                            <option value="5"><span data-i18n="last">Ostatnie</span> 5</option>
+                            <option value="10"><span data-i18n="last">Ostatnie</span> 10</option>
                         </select>
                     </div>
 
                     <!-- Date Range Filter (only visible in Month view) -->
                     <div id="dateFilterContainer" class="flex items-center gap-2 hidden">
-                        <label class="text-sm text-gray-600">Zakres dat:</label>
+                        <label class="text-sm text-gray-600"><span data-i18n="dateRange">Zakres dat:</span></label>
                         <select id="dateRangeFilter" class="border rounded px-3 py-1 text-sm" onchange="applyFilters()">
-                            <option value="all" selected>Wszystkie</option>
-                            <option value="7days">Ostatnie 7 dni</option>
-                            <option value="30days">Ostatnie 30 dni</option>
-                            <option value="60days">Ostatnie 60 dni</option>
-                            <option value="90days">Ostatnie 90 dni</option>
-                            <option value="thisMonth">Bieżący miesiąc</option>
-                            <option value="lastMonth">Poprzedni miesiąc</option>
-                            <option value="thisQuarter">Bieżący kwartał</option>
-                            <option value="custom">Niestandardowy...</option>
+                            <option value="all" selected data-i18n="all">Wszystkie</option>
+                            <option value="7days" data-i18n="last7days">Ostatnie 7 dni</option>
+                            <option value="30days" data-i18n="last30days">Ostatnie 30 dni</option>
+                            <option value="60days" data-i18n="last60days">Ostatnie 60 dni</option>
+                            <option value="90days" data-i18n="last90days">Ostatnie 90 dni</option>
+                            <option value="thisMonth" data-i18n="thisMonth">Bieżący miesiąc</option>
+                            <option value="lastMonth" data-i18n="lastMonth">Poprzedni miesiąc</option>
+                            <option value="thisQuarter" data-i18n="thisQuarter">Bieżący kwartał</option>
+                            <option value="custom" data-i18n="custom">Niestandardowy...</option>
                         </select>
                     </div>
 
@@ -200,24 +217,24 @@
                         <span class="text-gray-500">-</span>
                         <input type="date" id="endDate" class="border rounded px-2 py-1 text-sm">
                         <button onclick="applyFilters()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
-                            Zastosuj
+                            <span data-i18n="apply">Zastosuj</span>
                         </button>
                     </div>
 
                     <!-- Status Filter (always visible) -->
                     <div class="flex items-center gap-2">
-                        <label class="text-sm text-gray-600">Status:</label>
+                        <label class="text-sm text-gray-600"><span data-i18n="status">Status:</span></label>
                         <select id="statusFilter" class="border rounded px-3 py-1 text-sm" onchange="applyFilters()">
-                            <option value="all">Wszystkie</option>
-                            <option value="Done" selected>Done</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="To Do">To Do</option>
+                            <option value="all" data-i18n="all">Wszystkie</option>
+                            <option value="Done" selected data-i18n="done">Done</option>
+                            <option value="In Progress" data-i18n="inProgress">In Progress</option>
+                            <option value="To Do" data-i18n="toDo">To Do</option>
                         </select>
                     </div>
 
                     <!-- Reset Button -->
                     <button onclick="resetFilters()" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
-                        <i class="fas fa-redo mr-1"></i> Reset
+                        <i class="fas fa-redo mr-1"></i> <span data-i18n="reset">Reset</span>
                     </button>
 
                     <!-- Filter Status -->
@@ -233,7 +250,7 @@
                 <div class="metric-card text-white rounded-lg shadow p-6">
                     <div class="flex flex-col">
                         <div class="flex justify-between items-start mb-2">
-                            <p class="text-sm opacity-75">Total Story Points</p>
+                            <p class="text-sm opacity-75" data-i18n="totalStoryPoints">Total Story Points</p>
                             <i class="fas fa-star text-xl opacity-50"></i>
                         </div>
                         <p class="text-3xl font-bold" id="totalSP">0</p>
@@ -244,7 +261,7 @@
                 <div class="metric-card text-white rounded-lg shadow p-6">
                     <div class="flex flex-col">
                         <div class="flex justify-between items-start mb-2">
-                            <p class="text-sm opacity-75">Zadania</p>
+                            <p class="text-sm opacity-75" data-i18n="tasks">Zadania</p>
                             <i class="fas fa-tasks text-xl opacity-50"></i>
                         </div>
                         <p class="text-3xl font-bold" id="totalTasks">0</p>
@@ -255,7 +272,7 @@
                 <div class="metric-card text-white rounded-lg shadow p-6">
                     <div class="flex flex-col">
                         <div class="flex justify-between items-start mb-2">
-                            <p class="text-sm opacity-75">Completion Rate</p>
+                            <p class="text-sm opacity-75" data-i18n="completionRate">Completion Rate</p>
                             <i class="fas fa-check-circle text-xl opacity-50"></i>
                         </div>
                         <p class="text-3xl font-bold" id="completionRate">0%</p>
@@ -266,7 +283,7 @@
                 <div class="metric-card text-white rounded-lg shadow p-6">
                     <div class="flex flex-col">
                         <div class="flex justify-between items-start mb-2">
-                            <p class="text-sm opacity-75">Velocity</p>
+                            <p class="text-sm opacity-75" data-i18n="velocity">Velocity</p>
                             <i class="fas fa-rocket text-xl opacity-50"></i>
                         </div>
                         <p class="text-3xl font-bold" id="avgVelocity">0</p>
@@ -277,7 +294,7 @@
                 <div class="metric-card text-white rounded-lg shadow p-6">
                     <div class="flex flex-col">
                         <div class="flex justify-between items-start mb-2">
-                            <p class="text-sm opacity-75">In Progress</p>
+                            <p class="text-sm opacity-75" data-i18n="inProgress">In Progress</p>
                             <i class="fas fa-spinner text-xl opacity-50"></i>
                         </div>
                         <p class="text-3xl font-bold" id="inProgressCount">0</p>
@@ -288,7 +305,7 @@
                 <div class="metric-card text-white rounded-lg shadow p-6">
                     <div class="flex flex-col">
                         <div class="flex justify-between items-start mb-2">
-                            <p class="text-sm opacity-75">Zespół</p>
+                            <p class="text-sm opacity-75" data-i18n="team">Zespół</p>
                             <i class="fas fa-users text-xl opacity-50"></i>
                         </div>
                         <p class="text-3xl font-bold" id="teamSize">0</p>
@@ -303,14 +320,14 @@
                 <div class="bg-white rounded-lg shadow p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-bold">
-                            <i class="fas fa-chart-line mr-2"></i>Wydajność w Czasie
+                            <i class="fas fa-chart-line mr-2"></i><span data-i18n="performanceOverTime">Wydajność w Czasie</span>
                         </h3>
                         <div class="flex gap-2">
                             <button onclick="toggleAllUsersPerformance(true)" class="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
-                                Wszystkie
+                                <span data-i18n="allUsers">Wszystkie</span>
                             </button>
                             <button onclick="toggleAllUsersPerformance(false)" class="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
-                                Żadne
+                                <span data-i18n="none">Żadne</span>
                             </button>
                         </div>
                     </div>
@@ -322,7 +339,7 @@
                 <!-- Sprint Velocity -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-bold mb-4">
-                        <i class="fas fa-chart-bar mr-2"></i>Sprint Velocity
+                        <i class="fas fa-chart-bar mr-2"></i><span data-i18n="sprintVelocity">Sprint Velocity</span>
                     </h3>
                     <div class="chart-container">
                         <canvas id="velocityChart"></canvas>
@@ -336,14 +353,14 @@
                 <div class="bg-white rounded-lg shadow p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-bold">
-                            <i class="fas fa-user-check mr-2"></i>Zamknięte Zadania - Użytkownicy
+                            <i class="fas fa-user-check mr-2"></i><span data-i18n="closedIssuesByUser">Zamknięte Zadania - Użytkownicy</span>
                         </h3>
                         <div class="flex gap-2">
                             <button onclick="toggleAllUsersClosedIssues(true)" class="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
-                                Wszystkie
+                                <span data-i18n="allUsers">Wszystkie</span>
                             </button>
                             <button onclick="toggleAllUsersClosedIssues(false)" class="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
-                                Żadne
+                                <span data-i18n="none">Żadne</span>
                             </button>
                         </div>
                     </div>
@@ -355,7 +372,7 @@
                 <!-- Closed Issues Count (Right) -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-bold mb-4">
-                        <i class="fas fa-check-square mr-2"></i>Zamknięte Zadania
+                        <i class="fas fa-check-square mr-2"></i><span data-i18n="closedIssues">Zamknięte Zadania</span>
                     </h3>
                     <div class="chart-container">
                         <canvas id="closedIssuesChart"></canvas>
@@ -366,27 +383,27 @@
             <!-- User Statistics Table -->
             <div class="bg-white rounded-lg shadow p-6 mb-6">
                 <h3 class="text-lg font-bold mb-4">
-                    <i class="fas fa-chart-bar mr-2"></i>Statystyki Użytkowników
+                    <i class="fas fa-chart-bar mr-2"></i><span data-i18n="userStats">Statystyki Użytkowników</span>
                 </h3>
                 <div class="overflow-x-auto">
                     <table class="min-w-full table-auto">
                         <thead>
                             <tr class="bg-gray-100">
-                                <th class="px-4 py-2 text-left">Użytkownik</th>
-                                <th class="px-4 py-2 text-center">Zadania (Total)</th>
-                                <th class="px-4 py-2 text-center">Zadania (Done)</th>
-                                <th class="px-4 py-2 text-center">% Ukończenia</th>
-                                <th class="px-4 py-2 text-center">SP (Total)</th>
-                                <th class="px-4 py-2 text-center">SP (Done)</th>
-                                <th class="px-4 py-2 text-center">Średnia SP/zadanie</th>
-                                <th class="px-4 py-2 text-center" id="velocityColumnHeader">Velocity</th>
+                                <th class="px-4 py-2 text-left"><span data-i18n="user">Użytkownik</span></th>
+                                <th class="px-4 py-2 text-center"><span data-i18n="tasksTotal">Zadania (Total)</span></th>
+                                <th class="px-4 py-2 text-center"><span data-i18n="tasksDone">Zadania (Done)</span></th>
+                                <th class="px-4 py-2 text-center"><span data-i18n="completionPercent">% Ukończenia</span></th>
+                                <th class="px-4 py-2 text-center"><span data-i18n="spTotal">SP (Total)</span></th>
+                                <th class="px-4 py-2 text-center"><span data-i18n="spDone">SP (Done)</span></th>
+                                <th class="px-4 py-2 text-center"><span data-i18n="avgSpPerTask">Średnia SP/zadanie</span></th>
+                                <th class="px-4 py-2 text-center" id="velocityColumnHeader"><span data-i18n="velocityColumn">Velocity</span></th>
                             </tr>
                         </thead>
                         <tbody id="userStatsTable">
                         </tbody>
                         <tfoot>
                             <tr class="bg-blue-50 font-bold border-t-2 border-blue-300">
-                                <td class="px-4 py-3">ZESPÓŁ (Średnia)</td>
+                                <td class="px-4 py-3"><span data-i18n="teamAverage">ZESPÓŁ (Średnia)</span></td>
                                 <td class="px-4 py-3 text-center" id="teamAvgTasks">-</td>
                                 <td class="px-4 py-3 text-center" id="teamAvgDoneTasks">-</td>
                                 <td class="px-4 py-3 text-center" id="teamAvgCompletion">-</td>
@@ -403,7 +420,7 @@
             <!-- User Rankings -->
             <div class="bg-white rounded-lg shadow p-6 mb-6">
                 <h3 class="text-lg font-bold mb-4">
-                    <i class="fas fa-trophy mr-2"></i>Ranking Wydajności
+                    <i class="fas fa-trophy mr-2"></i><span data-i18n="performanceRanking">Ranking Wydajności</span>
                 </h3>
                 <div id="userRankings"></div>
             </div>
@@ -412,22 +429,22 @@
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold">
-                        <i class="fas fa-table mr-2"></i>Szczegóły Zadań
+                        <i class="fas fa-table mr-2"></i><span data-i18n="taskDetails">Szczegóły Zadań</span>
                     </h3>
                     <div class="text-sm text-gray-600">
-                        Wyświetlanie <span id="tableRangeStart">0</span>-<span id="tableRangeEnd">0</span> z <span id="tableTotalIssues">0</span>
+                        <span data-i18n="showing">Wyświetlanie</span> <span id="tableRangeStart">0</span>-<span id="tableRangeEnd">0</span> <span data-i18n="of">z</span> <span id="tableTotalIssues">0</span>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full table-auto">
                         <thead>
                             <tr class="bg-gray-100">
-                                <th class="px-4 py-2 text-left">Key</th>
-                                <th class="px-4 py-2 text-left">Summary</th>
-                                <th class="px-4 py-2 text-left">Sprint</th>
-                                <th class="px-4 py-2 text-left">Assignee</th>
-                                <th class="px-4 py-2 text-left">Story Points</th>
-                                <th class="px-4 py-2 text-left">Status</th>
+                                <th class="px-4 py-2 text-left"><span data-i18n="key">Key</span></th>
+                                <th class="px-4 py-2 text-left"><span data-i18n="summary">Summary</span></th>
+                                <th class="px-4 py-2 text-left"><span data-i18n="sprint">Sprint</span></th>
+                                <th class="px-4 py-2 text-left"><span data-i18n="assignee">Assignee</span></th>
+                                <th class="px-4 py-2 text-left"><span data-i18n="storyPoints">Story Points</span></th>
+                                <th class="px-4 py-2 text-left"><span data-i18n="status">Status</span></th>
                             </tr>
                         </thead>
                         <tbody id="issuesTable">
@@ -437,7 +454,7 @@
                 <!-- Pagination Controls -->
                 <div class="flex items-center justify-between mt-4 pt-4 border-t">
                     <div class="flex items-center gap-2">
-                        <label class="text-sm text-gray-600">Wierszy na stronę:</label>
+                        <label class="text-sm text-gray-600"><span data-i18n="rowsPerPage">Wierszy na stronę:</span></label>
                         <select id="tablePageSize" class="border rounded px-3 py-1 text-sm" onchange="changeTablePageSize()">
                             <option value="10">10</option>
                             <option value="25" selected>25</option>
@@ -447,13 +464,13 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <button onclick="changeTablePage(-1)" id="tablePrevBtn" class="px-3 py-1 border rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <i class="fas fa-chevron-left"></i> Poprzednia
+                            <i class="fas fa-chevron-left"></i> <span data-i18n="previous">Poprzednia</span>
                         </button>
                         <span class="text-sm text-gray-600">
-                            Strona <span id="tableCurrentPage">1</span> z <span id="tableTotalPages">1</span>
+                            <span data-i18n="page">Strona</span> <span id="tableCurrentPage">1</span> <span data-i18n="of">z</span> <span id="tableTotalPages">1</span>
                         </span>
                         <button onclick="changeTablePage(1)" id="tableNextBtn" class="px-3 py-1 border rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                            Następna <i class="fas fa-chevron-right"></i>
+                            <span data-i18n="next">Następna</span> <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
                 </div>
@@ -464,7 +481,7 @@
         <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div class="bg-white rounded-lg p-8 flex flex-col items-center min-w-[300px]">
                 <div class="loading-spinner mb-4"></div>
-                <p id="loadingMessage" class="text-center">Ładowanie danych...</p>
+                <p id="loadingMessage" class="text-center" data-i18n="loading">Ładowanie danych...</p>
             </div>
         </div>
     </div>
@@ -483,9 +500,267 @@
         let tablePage = 1;
         let tablePageSize = 25;
 
+        // Language system
+        let currentLanguage = localStorage.getItem('dashboardLanguage') || 'pl';
+
+        const translations = {
+            en: {
+                title: "JIRA Scrum Dashboard",
+                offline: "Offline",
+                online: "Online",
+                onlineCache: "Online (cache)",
+                refresh: "Refresh",
+                view: "View:",
+                sprints: "Sprints",
+                months: "Months",
+                grouping: "Grouping:",
+                loaded: "Loaded:",
+                issues: "issues",
+                in: "in",
+                sprintsCount: "sprints",
+                filters: "Filters:",
+                sprintsLabel: "Sprints:",
+                all: "All",
+                last: "Last",
+                dateRange: "Date range:",
+                last7days: "Last 7 days",
+                last30days: "Last 30 days",
+                last60days: "Last 60 days",
+                last90days: "Last 90 days",
+                thisMonth: "This month",
+                lastMonth: "Last month",
+                thisQuarter: "This quarter",
+                custom: "Custom...",
+                status: "Status:",
+                done: "Done",
+                inProgress: "In Progress",
+                toDo: "To Do",
+                reset: "Reset",
+                totalStoryPoints: "Total Story Points",
+                avg: "Avg:",
+                perTask: "per task",
+                tasks: "Tasks",
+                total: "Total",
+                completionRate: "Completion Rate",
+                good: "Good",
+                average: "Average",
+                low: "Low",
+                velocity: "Velocity",
+                spPerSprint: "SP per sprint",
+                spPerMonth: "SP per month",
+                team: "Team",
+                spPerPerson: "SP/person",
+                performanceOverTime: "Performance Over Time",
+                allUsers: "All",
+                none: "None",
+                sprintVelocity: "Sprint Velocity",
+                closedIssuesByUser: "Closed Issues - Users",
+                closedIssues: "Closed Issues",
+                closedIssuesPerSprint: "Closed issues per sprint",
+                closedIssuesPerMonth: "Closed issues per month",
+                numberOfTasks: "Number of tasks",
+                numberOfClosedTasks: "Number of closed tasks",
+                userStats: "User Statistics",
+                user: "User",
+                tasksTotal: "Tasks (Total)",
+                tasksDone: "Tasks (Done)",
+                completionPercent: "% Completion",
+                spTotal: "SP (Total)",
+                spDone: "SP (Done)",
+                avgSpPerTask: "Avg SP/task",
+                velocityColumn: "Velocity",
+                velocitySprint: "Velocity (SP/sprint)",
+                velocityMonth: "Velocity (SP/month)",
+                teamAverage: "TEAM (Average)",
+                performanceRanking: "Performance Ranking",
+                storyPoints: "Story Points",
+                taskDetails: "Task Details",
+                showing: "Showing",
+                of: "of",
+                key: "Key",
+                summary: "Summary",
+                sprint: "Sprint",
+                assignee: "Assignee",
+                rowsPerPage: "Rows per page:",
+                previous: "Previous",
+                next: "Next",
+                page: "Page",
+                loading: "Loading data...",
+                error: "Error",
+                noData: "No data to display",
+                cannotSwitchToSprint: "This project is Kanban type and does not support sprint view. Use month view.",
+                apply: "Apply"
+            },
+            pl: {
+                title: "JIRA Scrum Dashboard",
+                offline: "Offline",
+                online: "Online",
+                onlineCache: "Online (cache)",
+                refresh: "Odśwież",
+                view: "Widok:",
+                sprints: "Sprinty",
+                months: "Miesiące",
+                grouping: "Grupowanie:",
+                loaded: "Załadowano:",
+                issues: "issues",
+                in: "w",
+                sprintsCount: "sprintach",
+                filters: "Filtry:",
+                sprintsLabel: "Sprinty:",
+                all: "Wszystkie",
+                last: "Ostatni",
+                dateRange: "Zakres dat:",
+                last7days: "Ostatnie 7 dni",
+                last30days: "Ostatnie 30 dni",
+                last60days: "Ostatnie 60 dni",
+                last90days: "Ostatnie 90 dni",
+                thisMonth: "Bieżący miesiąc",
+                lastMonth: "Poprzedni miesiąc",
+                thisQuarter: "Bieżący kwartał",
+                custom: "Niestandardowy...",
+                status: "Status:",
+                done: "Done",
+                inProgress: "In Progress",
+                toDo: "To Do",
+                reset: "Reset",
+                totalStoryPoints: "Total Story Points",
+                avg: "Avg:",
+                perTask: "per task",
+                tasks: "Zadania",
+                total: "Total",
+                completionRate: "Completion Rate",
+                good: "Good",
+                average: "Average",
+                low: "Low",
+                velocity: "Velocity",
+                spPerSprint: "SP per sprint",
+                spPerMonth: "SP per month",
+                team: "Zespół",
+                spPerPerson: "SP/person",
+                performanceOverTime: "Wydajność w Czasie",
+                allUsers: "Wszystkie",
+                none: "Żadne",
+                sprintVelocity: "Sprint Velocity",
+                closedIssuesByUser: "Zamknięte Zadania - Użytkownicy",
+                closedIssues: "Zamknięte Zadania",
+                closedIssuesPerSprint: "Zamknięte zadania per sprint",
+                closedIssuesPerMonth: "Zamknięte zadania per miesiąc",
+                numberOfTasks: "Liczba zadań",
+                numberOfClosedTasks: "Liczba zamkniętych zadań",
+                userStats: "Statystyki Użytkowników",
+                user: "Użytkownik",
+                tasksTotal: "Zadania (Total)",
+                tasksDone: "Zadania (Done)",
+                completionPercent: "% Ukończenia",
+                spTotal: "SP (Total)",
+                spDone: "SP (Done)",
+                avgSpPerTask: "Średnia SP/zadanie",
+                velocityColumn: "Velocity",
+                velocitySprint: "Velocity (SP/sprint)",
+                velocityMonth: "Velocity (SP/miesiąc)",
+                teamAverage: "ZESPÓŁ (Średnia)",
+                performanceRanking: "Ranking Wydajności",
+                storyPoints: "Story Points",
+                taskDetails: "Szczegóły Zadań",
+                showing: "Wyświetlanie",
+                of: "z",
+                key: "Key",
+                summary: "Summary",
+                sprint: "Sprint",
+                assignee: "Assignee",
+                rowsPerPage: "Wierszy na stronę:",
+                previous: "Poprzednia",
+                next: "Następna",
+                page: "Strona",
+                loading: "Ładowanie danych...",
+                error: "Błąd",
+                noData: "Brak danych do wyświetlenia",
+                cannotSwitchToSprint: "Ten projekt jest typu Kanban i nie wspiera widoku sprintów. Użyj widoku miesięcy.",
+                apply: "Zastosuj"
+            }
+        };
+
+        function t(key) {
+            return translations[currentLanguage][key] || key;
+        }
+
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            localStorage.setItem('dashboardLanguage', lang);
+            updateLanguage();
+        }
+
+        function updateLanguage() {
+            // Update all translatable elements
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                // Skip option elements - they'll be handled separately
+                if (el.tagName !== 'OPTION') {
+                    el.textContent = t(key);
+                }
+            });
+
+            // Update select options
+            updateSelectOptions();
+
+            // Update placeholders
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                el.placeholder = t(key);
+            });
+
+            // Update language selector
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`.lang-btn[data-lang="${currentLanguage}"]`)?.classList.add('active');
+
+            // Re-render dashboard if data is loaded
+            if (jiraData.length > 0) {
+                renderDashboard();
+            }
+        }
+
+        function updateSelectOptions() {
+            // Sprint filter
+            const sprintFilter = document.getElementById('sprintFilter');
+            if (sprintFilter) {
+                sprintFilter.options[0].textContent = t('all');
+                sprintFilter.options[1].textContent = `${t('last')} 1`;
+                sprintFilter.options[2].textContent = `${t('last')} 2`;
+                sprintFilter.options[3].textContent = `${t('last')} 3`;
+                sprintFilter.options[4].textContent = `${t('last')} 5`;
+                sprintFilter.options[5].textContent = `${t('last')} 10`;
+            }
+
+            // Date range filter
+            const dateFilter = document.getElementById('dateRangeFilter');
+            if (dateFilter) {
+                dateFilter.options[0].textContent = t('all');
+                dateFilter.options[1].textContent = t('last7days');
+                dateFilter.options[2].textContent = t('last30days');
+                dateFilter.options[3].textContent = t('last60days');
+                dateFilter.options[4].textContent = t('last90days');
+                dateFilter.options[5].textContent = t('thisMonth');
+                dateFilter.options[6].textContent = t('lastMonth');
+                dateFilter.options[7].textContent = t('thisQuarter');
+                dateFilter.options[8].textContent = t('custom');
+            }
+
+            // Status filter
+            const statusFilter = document.getElementById('statusFilter');
+            if (statusFilter) {
+                statusFilter.options[0].textContent = t('all');
+                statusFilter.options[1].textContent = t('done');
+                statusFilter.options[2].textContent = t('inProgress');
+                statusFilter.options[3].textContent = t('toDo');
+            }
+        }
+
         // Load configuration from config.js
         window.onload = function() {
             initConfig();
+            updateLanguage(); // Initialize language
 
             // Auto-connect if token is available
             const savedToken = localStorage.getItem('jiraToken');
@@ -887,7 +1162,7 @@
 
             if (view === 'sprint' && boardType === 'kanban') {
                 console.log('❌ Cannot switch to sprint view - this is a Kanban project');
-                alert('Ten projekt jest typu Kanban i nie wspiera widoku sprintów. Użyj widoku miesięcy.');
+                alert(t('cannotSwitchToSprint'));
                 return;
             }
 
@@ -899,8 +1174,8 @@
             document.getElementById('monthViewBtn').classList.toggle('active', view === 'month');
 
             // Update label
-            document.getElementById('currentViewLabel').textContent = view === 'sprint' ? 'Sprinty' : 'Miesiące';
-            document.getElementById('velocityLabel').textContent = view === 'sprint' ? 'SP per sprint' : 'SP per month';
+            document.getElementById('currentViewLabel').innerHTML = `<span data-i18n="${view === 'sprint' ? 'sprints' : 'months'}">${t(view === 'sprint' ? 'sprints' : 'months')}</span>`;
+            document.getElementById('velocityLabel').textContent = view === 'sprint' ? t('spPerSprint') : t('spPerMonth');
 
             // Show/hide appropriate filters based on view
             const sprintFilterContainer = document.getElementById('sprintFilterContainer');
@@ -1624,7 +1899,7 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: currentView === 'sprint' ? 'Sprint Velocity' : 'Monthly Velocity',
+                        label: currentView === 'sprint' ? t('sprintVelocity') : t('velocity'),
                         data: velocities,
                         backgroundColor: '#3B82F6',
                         borderColor: '#2563EB',
@@ -1696,7 +1971,7 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: currentView === 'sprint' ? 'Zamknięte zadania per sprint' : 'Zamknięte zadania per miesiąc',
+                        label: currentView === 'sprint' ? t('closedIssuesPerSprint') : t('closedIssuesPerMonth'),
                         data: closedCounts,
                         backgroundColor: '#10B981',
                         borderColor: '#059669',
@@ -1711,7 +1986,7 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Liczba zadań'
+                                text: t('numberOfTasks')
                             },
                             ticks: {
                                 stepSize: 1
@@ -1808,7 +2083,7 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Liczba zamkniętych zadań'
+                                text: t('numberOfClosedTasks')
                             },
                             ticks: {
                                 stepSize: 1
@@ -1902,8 +2177,8 @@
             const users = [...new Set(jiraData.map(i => i.assignee))];
 
             // Update velocity column header based on view
-            const velocityHeader = currentView === 'sprint' ? 'Velocity (SP/sprint)' : 'Velocity (SP/miesiąc)';
-            document.getElementById('velocityColumnHeader').textContent = velocityHeader;
+            const velocityHeader = currentView === 'sprint' ? t('velocitySprint') : t('velocityMonth');
+            document.getElementById('velocityColumnHeader').innerHTML = `<span data-i18n="${currentView === 'sprint' ? 'velocitySprint' : 'velocityMonth'}">${velocityHeader}</span>`;
 
             // Calculate periods for velocity
             let periods;
@@ -2013,9 +2288,9 @@
                             </div>
                             <p class="font-medium">${user.name}</p>
                             <div class="mt-2 text-sm">
-                                <p>Story Points: <span class="font-bold text-blue-600">${user.storyPoints}</span></p>
-                                <p>Zadania: <span class="font-bold">${user.tasks}</span></p>
-                                <p>Średnia: <span class="font-bold">${(user.storyPoints / user.tasks).toFixed(1)}</span></p>
+                                <p><span data-i18n="storyPoints">${t('storyPoints')}</span>: <span class="font-bold text-blue-600">${user.storyPoints}</span></p>
+                                <p><span data-i18n="tasks">${t('tasks')}</span>: <span class="font-bold">${user.tasks}</span></p>
+                                <p><span data-i18n="avg">${t('avg')}</span> <span class="font-bold">${(user.storyPoints / user.tasks).toFixed(1)}</span></p>
                             </div>
                         </div>
                     `).join('')}
