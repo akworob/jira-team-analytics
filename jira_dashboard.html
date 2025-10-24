@@ -484,6 +484,55 @@
                 <p id="loadingMessage" class="text-center" data-i18n="loading">Ładowanie danych...</p>
             </div>
         </div>
+
+        <!-- Project Management Modal -->
+        <div id="projectManagementModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto mx-4">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">
+                        <i class="fas fa-cog mr-2"></i>
+                        <span data-i18n="manageProjects">Zarządzaj Projektami</span>
+                    </h2>
+                    <button onclick="closeProjectManagementModal()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times text-2xl"></i>
+                    </button>
+                </div>
+
+                <!-- Visible Projects -->
+                <div class="mb-6">
+                    <h3 class="text-lg font-semibold mb-3 text-green-600">
+                        <i class="fas fa-eye mr-2"></i>
+                        <span data-i18n="visibleProjects">Widoczne Projekty</span>
+                    </h3>
+                    <div id="visibleProjectsList" class="space-y-2">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
+                <!-- Hidden Projects -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-lg font-semibold text-gray-600">
+                            <i class="fas fa-eye-slash mr-2"></i>
+                            <span data-i18n="hiddenProjects">Ukryte Projekty</span>
+                        </h3>
+                        <button onclick="showAllProjects()" class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            <i class="fas fa-eye mr-1"></i> <span data-i18n="showAll">Pokaż Wszystkie</span>
+                        </button>
+                    </div>
+                    <div id="hiddenProjectsList" class="space-y-2">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
+                <!-- Close Button -->
+                <div class="flex justify-end">
+                    <button onclick="closeProjectManagementModal()" class="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+                        <i class="fas fa-check mr-2"></i> Done
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -502,6 +551,9 @@
 
         // Language system
         let currentLanguage = localStorage.getItem('dashboardLanguage') || 'pl';
+
+        // Hidden projects management
+        let hiddenProjects = JSON.parse(localStorage.getItem('hiddenProjects') || '[]');
 
         const translations = {
             en: {
@@ -589,7 +641,14 @@
                 error: "Error",
                 noData: "No data to display",
                 cannotSwitchToSprint: "This project is Kanban type and does not support sprint view. Use month view.",
-                apply: "Apply"
+                apply: "Apply",
+                hideProject: "Hide project",
+                showProject: "Show project",
+                manageProjects: "Manage Projects",
+                hiddenProjects: "Hidden Projects",
+                visibleProjects: "Visible Projects",
+                noHiddenProjects: "No hidden projects",
+                showAll: "Show All"
             },
             pl: {
                 title: "JIRA Scrum Dashboard",
@@ -676,7 +735,14 @@
                 error: "Błąd",
                 noData: "Brak danych do wyświetlenia",
                 cannotSwitchToSprint: "Ten projekt jest typu Kanban i nie wspiera widoku sprintów. Użyj widoku miesięcy.",
-                apply: "Zastosuj"
+                apply: "Zastosuj",
+                hideProject: "Ukryj projekt",
+                showProject: "Pokaż projekt",
+                manageProjects: "Zarządzaj Projektami",
+                hiddenProjects: "Ukryte Projekty",
+                visibleProjects: "Widoczne Projekty",
+                noHiddenProjects: "Brak ukrytych projektów",
+                showAll: "Pokaż Wszystkie"
             }
         };
 
@@ -688,6 +754,104 @@
             currentLanguage = lang;
             localStorage.setItem('dashboardLanguage', lang);
             updateLanguage();
+        }
+
+        // Hide/Show project functions
+        function toggleProjectVisibility(projectKey) {
+            const index = hiddenProjects.indexOf(projectKey);
+            if (index > -1) {
+                // Show project
+                hiddenProjects.splice(index, 1);
+            } else {
+                // Hide project
+                hiddenProjects.push(projectKey);
+
+                // If hiding current project, switch to another visible project
+                if (currentProject === projectKey) {
+                    const visibleProjects = availableProjects.filter(p => !hiddenProjects.includes(p.key));
+                    if (visibleProjects.length > 0) {
+                        switchProject(visibleProjects[0].key);
+                    }
+                }
+            }
+
+            localStorage.setItem('hiddenProjects', JSON.stringify(hiddenProjects));
+            renderProjectTabs();
+
+            // Refresh the modal content if it's open
+            const modal = document.getElementById('projectManagementModal');
+            if (modal && !modal.classList.contains('hidden')) {
+                renderProjectManagementList();
+            }
+        }
+
+        function showAllProjects() {
+            hiddenProjects = [];
+            localStorage.setItem('hiddenProjects', JSON.stringify(hiddenProjects));
+            renderProjectTabs();
+
+            // Refresh the modal content if it's open
+            const modal = document.getElementById('projectManagementModal');
+            if (modal && !modal.classList.contains('hidden')) {
+                renderProjectManagementList();
+            }
+        }
+
+        function openProjectManagementModal() {
+            const modal = document.getElementById('projectManagementModal');
+            renderProjectManagementList();
+            modal.classList.remove('hidden');
+        }
+
+        function closeProjectManagementModal() {
+            const modal = document.getElementById('projectManagementModal');
+            modal.classList.add('hidden');
+        }
+
+        function renderProjectManagementList() {
+            const visibleList = document.getElementById('visibleProjectsList');
+            const hiddenList = document.getElementById('hiddenProjectsList');
+
+            const visibleProjects = availableProjects.filter(p => !hiddenProjects.includes(p.key));
+            const hiddenProjectsList = availableProjects.filter(p => hiddenProjects.includes(p.key));
+
+            // Render visible projects
+            visibleList.innerHTML = visibleProjects.map(project => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100">
+                    <div class="flex items-center gap-2">
+                        ${project.boardType === 'scrum' ?
+                            '<i class="fas fa-project-diagram text-blue-500"></i>' :
+                            '<i class="fas fa-stream text-green-500"></i>'}
+                        <span class="font-medium">${project.name}</span>
+                        <span class="text-xs text-gray-500">(${project.key})</span>
+                    </div>
+                    <button onclick="toggleProjectVisibility('${project.key}')"
+                            class="text-xs px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
+                        <i class="fas fa-eye-slash mr-1"></i> <span data-i18n="hideProject">${t('hideProject')}</span>
+                    </button>
+                </div>
+            `).join('');
+
+            // Render hidden projects
+            if (hiddenProjectsList.length === 0) {
+                hiddenList.innerHTML = `<p class="text-gray-500 text-center py-4" data-i18n="noHiddenProjects">${t('noHiddenProjects')}</p>`;
+            } else {
+                hiddenList.innerHTML = hiddenProjectsList.map(project => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100">
+                        <div class="flex items-center gap-2 opacity-60">
+                            ${project.boardType === 'scrum' ?
+                                '<i class="fas fa-project-diagram text-blue-500"></i>' :
+                                '<i class="fas fa-stream text-green-500"></i>'}
+                            <span class="font-medium">${project.name}</span>
+                            <span class="text-xs text-gray-500">(${project.key})</span>
+                        </div>
+                        <button onclick="toggleProjectVisibility('${project.key}')"
+                                class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            <i class="fas fa-eye mr-1"></i> <span data-i18n="showProject">${t('showProject')}</span>
+                        </button>
+                    </div>
+                `).join('');
+            }
         }
 
         function updateLanguage() {
@@ -1056,10 +1220,14 @@
             // Clear existing tabs
             tabsContainer.innerHTML = '';
 
-            // Create tabs for each project
-            availableProjects.forEach((project, index) => {
+            // Filter out hidden projects
+            const visibleProjects = availableProjects.filter(p => !hiddenProjects.includes(p.key));
+
+            // Create tabs for each visible project
+            visibleProjects.forEach((project, index) => {
                 const tab = document.createElement('div');
-                tab.className = `project-tab px-4 py-2 rounded-t ${index === 0 ? 'active' : ''}`;
+                const isActive = project.key === currentProject;
+                tab.className = `project-tab px-4 py-2 rounded-t ${isActive ? 'active' : ''}`;
                 tab.setAttribute('data-project-key', project.key);
                 tab.onclick = () => switchProject(project.key);
 
@@ -1073,7 +1241,15 @@
                 tabsContainer.appendChild(tab);
             });
 
-            console.log(`Rendered ${availableProjects.length} project tabs`);
+            // Add manage projects button
+            const manageBtn = document.createElement('button');
+            manageBtn.className = 'px-4 py-2 rounded-t bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm';
+            manageBtn.onclick = openProjectManagementModal;
+            manageBtn.innerHTML = '<i class="fas fa-cog mr-1"></i> <span data-i18n="manageProjects">' + t('manageProjects') + '</span>';
+            manageBtn.title = t('manageProjects');
+            tabsContainer.appendChild(manageBtn);
+
+            console.log(`Rendered ${visibleProjects.length} visible project tabs (${hiddenProjects.length} hidden)`);
         }
 
         // Switch between projects
