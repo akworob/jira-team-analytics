@@ -312,9 +312,19 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <!-- User Performance Over Time -->
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-bold mb-4">
-                        <i class="fas fa-chart-line mr-2"></i>Wydajność w Czasie
-                    </h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold">
+                            <i class="fas fa-chart-line mr-2"></i>Wydajność w Czasie
+                        </h3>
+                        <div class="flex gap-2">
+                            <button onclick="toggleAllUsersPerformance(true)" class="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                Wszystkie
+                            </button>
+                            <button onclick="toggleAllUsersPerformance(false)" class="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
+                                Żadne
+                            </button>
+                        </div>
+                    </div>
                     <div class="chart-container">
                         <canvas id="performanceChart"></canvas>
                     </div>
@@ -335,9 +345,19 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 <!-- Closed Issues by User (Left) -->
                 <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-bold mb-4">
-                        <i class="fas fa-user-check mr-2"></i>Zamknięte Zadania - Użytkownicy
-                    </h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold">
+                            <i class="fas fa-user-check mr-2"></i>Zamknięte Zadania - Użytkownicy
+                        </h3>
+                        <div class="flex gap-2">
+                            <button onclick="toggleAllUsersClosedIssues(true)" class="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                Wszystkie
+                            </button>
+                            <button onclick="toggleAllUsersClosedIssues(false)" class="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
+                                Żadne
+                            </button>
+                        </div>
+                    </div>
                     <div class="chart-container">
                         <canvas id="closedByUserChart"></canvas>
                     </div>
@@ -1695,6 +1715,28 @@
             tablePageSize = parseInt(document.getElementById('tablePageSize').value);
             tablePage = 1; // Reset to first page
             renderIssuesTable();
+        }
+
+        // Toggle all users visibility in Performance Chart
+        function toggleAllUsersPerformance(show) {
+            if (!charts.performance) return;
+
+            charts.performance.data.datasets.forEach((dataset, index) => {
+                const meta = charts.performance.getDatasetMeta(index);
+                meta.hidden = !show;
+            });
+            charts.performance.update();
+        }
+
+        // Toggle all users visibility in Closed Issues Chart
+        function toggleAllUsersClosedIssues(show) {
+            if (!charts.closedByUser) return;
+
+            charts.closedByUser.data.datasets.forEach((dataset, index) => {
+                const meta = charts.closedByUser.getDatasetMeta(index);
+                meta.hidden = !show;
+            });
+            charts.closedByUser.update();
         }
 
         // Helper functions
