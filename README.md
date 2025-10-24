@@ -1,6 +1,6 @@
-# 🚀 JIRA Scrum Dashboard
+# 🚀 Jira Team Analytics
 
-An interactive dashboard for analyzing Scrum team performance with JIRA API integration.
+An interactive analytics dashboard for Agile teams with automatic Scrum/Kanban detection and JIRA API integration.
 
 [Polish version / Wersja polska](README.pl.md)
 
@@ -292,4 +292,4 @@ If you have questions or issues:
 
 ---
 
-Made with ❤️ for Scrum Teams
+Made with ❤️ for Agile Teams
