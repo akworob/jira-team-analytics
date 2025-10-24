@@ -2,8 +2,19 @@
 .env
 config.js
 
+# Claude AI files (local settings)
+.claude/
+.claude/settings.local.json
+
 # Node modules (if using npm/yarn in the future)
 node_modules/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
 # OS files
 .DS_Store
@@ -14,3 +25,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+*~
+
+# Test and temporary files
+test_*.py
+*.log
+*.tmp

@@ -1,244 +1,294 @@
 # 🚀 JIRA Scrum Dashboard
 
-Interaktywny dashboard do analizy wydajności zespołu Scrum z integracją JIRA API.
+An interactive dashboard for analyzing Scrum team performance with JIRA API integration.
 
-## ✨ Funkcje
+[Polish version / Wersja polska](README.pl.md)
 
-- **📊 Live Data z JIRA** - pobiera dane w czasie rzeczywistym przez API
-- **📈 Wykresy Interaktywne** - Chart.js dla wizualizacji danych
-- **🏆 Rankingi Wydajności** - automatyczne rankingi zespołu
-- **📉 Analiza Trendów** - śledzenie wydajności w czasie
-- **⚡ Tryb Demo** - możliwość testowania bez API
-- **🔄 Auto-refresh** - automatyczne odświeżanie danych
-- **📱 Responsive Design** - działa na wszystkich urządzeniach
+## ✨ Features
 
-## 🛠️ Instalacja
+- **📊 Live JIRA Data** - real-time data fetching via API
+- **🌐 Multi-language Support** - Polish and English (🇵🇱 🇬🇧)
+- **🔄 Automatic Project Detection** - dynamically discovers all accessible JIRA projects
+- **🎯 Smart Board Type Detection** - automatically detects Scrum vs Kanban boards
+- **📈 Interactive Charts** - Chart.js visualizations
+- **🏆 Performance Rankings** - automatic team rankings
+- **📉 Trend Analysis** - track performance over time
+- **📱 Responsive Design** - works on all devices
+- **💾 Data Caching** - faster loading with intelligent caching
+- **🔀 Flexible Views** - Sprint view for Scrum, Month view for Kanban
 
-### Opcja 1: Standalone HTML (Tryb Demo)
+## 🛠️ Installation
 
-1. Otwórz plik `jira_dashboard.html` w przeglądarce
-2. Kliknij "Tryb Demo" aby zobaczyć przykładowe dane
-3. Nie wymaga instalacji!
-
-### Opcja 2: Z Serwerem Proxy (Pełna integracja JIRA)
-
-#### Wymagania:
+### Requirements:
 - Python 3.7+
-- pip
+- Modern web browser
+- JIRA account with API access
 
-#### Instalacja:
+### Quick Start:
 
+1. **Clone the repository**
 ```bash
-# Zainstaluj zależności
-pip install flask flask-cors requests
-
-# Uruchom serwer proxy
-python jira_proxy_server.py
-
-# Serwer uruchomi się na http://localhost:5000
+git clone https://github.com/yourusername/jira-scrum-dashboard.git
+cd jira-scrum-dashboard
 ```
 
-## 🔐 Konfiguracja JIRA
+2. **Install dependencies**
+```bash
+# On Linux/Mac:
+chmod +x install.sh
+./install.sh
 
-### 1. Utwórz API Token
+# On Windows:
+install.bat
 
-1. Zaloguj się do JIRA/Atlassian
-2. Idź do: https://id.atlassian.com/manage-profile/security/api-tokens
-3. Kliknij "Create API token"
-4. Nazwij token (np. "Dashboard")
-5. Skopiuj wygenerowany token
+# Or manually:
+pip install -r requirements.txt
+```
 
-### 2. Skonfiguruj Dashboard
+3. **Configure your credentials**
+```bash
+# Copy the example config
+cp config.example.js config.js
 
-W dashboardzie wypełnij:
+# Edit config.js with your JIRA credentials
+```
+
+4. **Start the server**
+```bash
+# On Linux/Mac:
+./start.sh
+
+# On Windows/Manual:
+python3 server.py
+
+# Server will start at http://localhost:8000
+```
+
+5. **Open in browser**
+```
+http://localhost:8000/jira_dashboard.html
+```
+
+## 🔐 JIRA Configuration
+
+### 1. Create API Token
+
+1. Log in to JIRA/Atlassian
+2. Go to: https://id.atlassian.com/manage-profile/security/api-tokens
+3. Click "Create API token"
+4. Name it (e.g., "Dashboard")
+5. Copy the generated token
+
+### 2. Configure Dashboard
+
+Fill in the dashboard form:
 - **JIRA URL**: `https://your-domain.atlassian.net`
-- **Email**: Twój email użyty w JIRA
-- **API Token**: Token wygenerowany w kroku 1
-- **JQL Query**: np. `project = BESS ORDER BY updated DESC`
+- **Email**: Your JIRA email
+- **API Token**: Token from step 1
+- **JQL Query**: Will be auto-generated per project
 
-## 📊 Używanie Dashboard
-
-### Podstawowe funkcje:
-
-1. **Połączenie z JIRA**
-   - Wypełnij dane konfiguracyjne
-   - Kliknij "Połącz"
-   - Status zmieni się na "Online"
-
-2. **Metryki (górne karty)**
-   - Total Story Points
-   - Liczba zadań
-   - Velocity średnie
-   - Wielkość zespołu
-
-3. **Porównanie Sprintów**
-   - Automatyczne porównanie ostatnich 2 sprintów
-   - Pokazuje zmiany procentowe
-
-4. **Wykresy**
-   - **Wydajność w Czasie**: Liniowy wykres pokazujący SP każdej osoby per sprint
-   - **Sprint Velocity**: Słupkowy wykres velocity kolejnych sprintów
-
-5. **Ranking Wydajności**
-   - Top 3 osoby z największą ilością Story Points
-   - Pokazuje średnią SP/zadanie
-
-## 🔧 Zaawansowane opcje
-
-### Custom JQL Queries
-
-Przykłady przydatnych zapytań JQL:
-
-```sql
--- Zadania z ostatnich 30 dni
-project = BESS AND updated >= -30d
-
--- Tylko zakończone zadania
-project = BESS AND status = Done
-
--- Zadania konkretnego użytkownika
-project = BESS AND assignee = "John Doe"
-
--- Zadania z konkretnego sprintu
-project = BESS AND sprint = "Sprint 19"
-
--- Zadania z Story Points
-project = BESS AND "Story point estimate" > 0
+Or edit `config.js`:
+```javascript
+const CONFIG = {
+    JIRA_URL: 'https://your-domain.atlassian.net',
+    JIRA_EMAIL: 'your-email@example.com',
+    JIRA_API_TOKEN: 'your-api-token',
+    JQL_QUERY: 'project = "YOURPROJECT" ORDER BY updated DESC'
+};
 ```
 
-### Modyfikacja Story Points Field
+## 📊 Using the Dashboard
 
-Jeśli Twoja JIRA używa innego pola dla Story Points:
+### Automatic Project Discovery
 
-1. Otwórz `jira_proxy_server.py`
-2. Znajdź linię: `'storyPoints': fields.get('customfield_10016')`
-3. Zmień `customfield_10016` na ID Twojego pola
+The dashboard automatically:
+1. Fetches all accessible JIRA projects
+2. Detects if each project uses Scrum or Kanban
+3. Creates tabs for easy project switching
+4. Adapts UI based on project type (disables sprint view for Kanban)
 
-Jak znaleźć ID pola:
-- Idź do JIRA Settings → Custom Fields
-- Znajdź pole Story Points
-- ID będzie w URL lub opisie
+### Language Switching
 
-## 🚨 Rozwiązywanie problemów
+Click the flag icons in the header:
+- 🇵🇱 Polish
+- 🇬🇧 English
 
-### Problem: CORS Error
-**Rozwiązanie**: Użyj serwera proxy (`jira_proxy_server.py`)
+Your language preference is saved automatically.
 
-### Problem: Authentication Failed
-**Rozwiązanie**: 
-- Sprawdź czy API token jest aktualny
-- Upewnij się że używasz emaila (nie username)
-- Sprawdź czy masz uprawnienia do projektu
+### Metrics Cards (Top Section)
 
-### Problem: No Story Points
-**Rozwiązanie**:
-- Sprawdź ID pola Story Points w JIRA
-- Zaktualizuj `customfield_10016` w kodzie
+- **Total Story Points** - sum of all story points
+- **Tasks** - total number of issues with breakdown
+- **Completion Rate** - percentage of completed tasks
+- **Velocity** - average story points per sprint/month
+- **In Progress** - current work in progress
+- **Team** - team size and average SP per person
 
-### Problem: Empty Sprint Name
-**Rozwiązanie**:
-- Niektóre zadania mogą nie mieć przypisanego sprintu
-- Dashboard pokazuje je jako "No Sprint"
+### Views
 
-## 📝 Struktura plików
+**Sprint View** (Scrum projects only):
+- Shows data grouped by sprints
+- Sprint velocity charts
+- Sprint-based filters
+
+**Month View** (All projects):
+- Shows data grouped by months
+- Monthly velocity trends
+- Date range filters
+
+### Charts
+
+1. **Performance Over Time** - line chart showing each team member's story points per sprint/month
+2. **Sprint/Month Velocity** - bar chart of total velocity
+3. **Closed Issues by User** - stacked area chart
+4. **Closed Issues Count** - task completion trends
+
+### Filters
+
+- **Sprint Filter** (Scrum): Last 1, 2, 3, 5, or 10 sprints
+- **Date Range** (Month view): Various date ranges or custom dates
+- **Status Filter**: All, Done, In Progress, To Do
+
+## 🔧 Advanced Configuration
+
+### Custom Story Points Field
+
+If your JIRA uses a different Story Points field:
+
+1. Find your field ID:
+   - Go to JIRA issue view
+   - Open browser dev tools (F12)
+   - Look for the story points field in the API response
+
+2. Update `jira_dashboard.html`:
+```javascript
+// Find this line (around line 1450):
+storyPoints: sprintField?.[0]?.customfield_10016 || 0
+
+// Replace customfield_10016 with your field ID
+storyPoints: sprintField?.[0]?.customfield_XXXXX || 0
+```
+
+### Custom Sprint Field
+
+Similarly for sprint field (usually `customfield_10020`):
+```javascript
+// Around line 1448:
+sprintField = fields.customfield_10020;
+```
+
+## 🚨 Troubleshooting
+
+### CORS Errors
+**Solution**: Make sure you're using the included Python server (`server.py`). Don't open the HTML file directly.
+
+### Authentication Failed
+**Solution**:
+- Verify your API token is current
+- Use email address (not username)
+- Check project permissions
+
+### No Projects Showing
+**Solution**:
+- Verify you have access to at least one JIRA project
+- Check browser console (F12) for error messages
+- Clear cache: Click "Odśwież/Refresh" button
+
+### Wrong Board Type Detected
+**Solution**:
+- The system checks actual sprint data
+- If a "Scrum" board has no sprints, it's treated as Kanban
+- Click refresh to re-detect board types
+
+## 📁 Project Structure
 
 ```
 .
-├── jira_dashboard.html      # Frontend dashboard
-├── jira_proxy_server.py     # Backend proxy server
-└── README.md               # Dokumentacja
+├── jira_dashboard.html      # Main dashboard (frontend)
+├── server.py                # Local server with CORS proxy
+├── config.js                # Configuration (gitignored)
+├── config.example.js        # Configuration template
+├── install.sh               # Unix installation script
+├── install.bat              # Windows installation script
+├── start.sh                 # Unix startup script
+├── requirements.txt         # Python dependencies
+├── README.md               # Documentation (English)
+├── README.pl.md            # Documentation (Polish)
+└── .gitignore              # Git ignore rules
 ```
 
-## 🎨 Customizacja
+## 🎨 Customization
 
-### Zmiana kolorów wykresów
+### Adding More Languages
 
-W `jira_dashboard.html` znajdź:
-```javascript
-const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
-```
-
-### Zmiana liczby wyświetlanych zadań
-
-Znajdź: `jiraData.slice(0, 10)` i zmień `10` na inną liczbę
-
-### Dodanie nowych metryk
-
-Dodaj nową kartę w sekcji metrics cards:
-```html
-<div class="metric-card text-white rounded-lg shadow p-6">
-    <div class="flex justify-between items-center">
-        <div>
-            <p class="text-sm opacity-75">Nowa Metryka</p>
-            <p class="text-3xl font-bold" id="newMetric">0</p>
-        </div>
-        <i class="fas fa-chart-pie text-3xl opacity-50"></i>
-    </div>
-</div>
-```
-
-## 🔄 Auto-refresh
-
-Dashboard może automatycznie odświeżać dane:
+Edit `jira_dashboard.html` and add to the `translations` object:
 
 ```javascript
-// Dodaj to do kodu JavaScript
-setInterval(() => {
-    if (document.getElementById('jiraToken').value) {
-        refreshData();
-    }
-}, 300000); // Odśwież co 5 minut (300000ms)
+const translations = {
+    en: { /* English translations */ },
+    pl: { /* Polish translations */ },
+    es: { /* Spanish translations */ },
+    // Add your language here
+};
 ```
 
-## 📊 Export danych
+Then add a flag button in the header.
 
-Możesz dodać funkcję exportu do CSV:
+### Changing Chart Colors
 
+Find the color definitions in `jira_dashboard.html`:
 ```javascript
-function exportToCSV() {
-    const csv = jiraData.map(row => 
-        `${row.key},${row.summary},${row.sprint},${row.assignee},${row.storyPoints}`
-    ).join('\n');
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'jira_export.csv';
-    a.click();
-}
+backgroundColor: '#3B82F6',  // Blue
+borderColor: '#2563EB',
 ```
 
-## 🔒 Bezpieczeństwo
+## 🔒 Security
 
-⚠️ **WAŻNE**: 
-- Nigdy nie commituj API tokenów do repozytorium
-- Używaj zmiennych środowiskowych dla wrażliwych danych
-- W produkcji używaj HTTPS
-- Rozważ użycie OAuth 2.0 zamiast API tokenów
+⚠️ **IMPORTANT**:
+- Never commit API tokens to the repository
+- `config.js` is gitignored by default
+- Keep `.env` files private
+- Use HTTPS in production
+- Consider OAuth 2.0 for production deployments
 
-## 🤝 Wsparcie
+## 🤝 Contributing
 
-Jeśli masz pytania lub problemy:
-1. Sprawdź dokumentację JIRA API
-2. Sprawdź logi w konsoli przeglądarki (F12)
-3. Sprawdź logi serwera proxy
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-## 📜 Licencja
+## 📜 License
 
-MIT License - używaj swobodnie!
+MIT License - feel free to use!
 
 ## 🎯 Roadmap
 
-Planowane funkcje:
-- [ ] Eksport do PDF
-- [ ] Więcej typów wykresów
-- [ ] Predykcja velocity
-- [ ] Integracja z Slack
+Implemented:
+- [x] Multi-language support (PL/EN)
+- [x] Dynamic project detection
+- [x] Scrum/Kanban auto-detection
+- [x] Sprint/Month view switching
+- [x] Data caching
+- [x] Responsive design
+
+Planned features:
+- [ ] PDF export
+- [ ] More chart types
+- [ ] Velocity predictions
+- [ ] Slack integration
 - [ ] Dark mode
-- [ ] Multi-projekt support
 - [ ] Burndown charts
 - [ ] Time tracking analysis
+- [ ] More languages
+
+## 📞 Support
+
+If you have questions or issues:
+1. Check the browser console (F12) for errors
+2. Review JIRA API documentation
+3. Open an issue on GitHub
 
 ---
 
