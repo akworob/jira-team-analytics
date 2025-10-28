@@ -380,6 +380,39 @@
                 </div>
             </div>
 
+            <!-- New Analysis Charts - Third Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Story Points per User per Sprint/Month (Left) -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold">
+                            <i class="fas fa-chart-line mr-2"></i><span data-i18n="storyPointsPerUserPeriod">Story Points na Użytkownika (Sprint/Miesiąc)</span>
+                        </h3>
+                        <div class="flex gap-2">
+                            <button onclick="toggleAllUsersSpPerPeriod(true)" class="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                <span data-i18n="allUsers">Wszystkie</span>
+                            </button>
+                            <button onclick="toggleAllUsersSpPerPeriod(false)" class="text-xs px-2 py-1 bg-gray-500 text-white rounded hover:bg-gray-600">
+                                <span data-i18n="none">Żadne</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="spPerUserPeriodChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Story Points vs Completion Time Analysis (Right) -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold mb-4">
+                        <i class="fas fa-balance-scale mr-2"></i><span data-i18n="spVsCompletionTime">Analiza: SP vs Czas Realizacji</span>
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="spVsCompletionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <!-- User Statistics Table -->
             <div class="bg-white rounded-lg shadow p-6 mb-6">
                 <h3 class="text-lg font-bold mb-4">
@@ -648,7 +681,12 @@
                 hiddenProjects: "Hidden Projects",
                 visibleProjects: "Visible Projects",
                 noHiddenProjects: "No hidden projects",
-                showAll: "Show All"
+                showAll: "Show All",
+                storyPointsPerUserPeriod: "Story Points per User (Sprint/Month)",
+                spVsCompletionTime: "Analysis: SP vs Completion Time",
+                storyPointsCompleted: "Story Points Completed",
+                avgStoryPointsPerTask: "Avg SP per Task",
+                avgCompletionDays: "Avg Completion Time (days)"
             },
             pl: {
                 title: "Jira Team Analytics",
@@ -742,7 +780,12 @@
                 hiddenProjects: "Ukryte Projekty",
                 visibleProjects: "Widoczne Projekty",
                 noHiddenProjects: "Brak ukrytych projektów",
-                showAll: "Pokaż Wszystkie"
+                showAll: "Pokaż Wszystkie",
+                storyPointsPerUserPeriod: "Story Points na Użytkownika (Sprint/Miesiąc)",
+                spVsCompletionTime: "Analiza: SP vs Czas Realizacji",
+                storyPointsCompleted: "Zrealizowane Story Points",
+                avgStoryPointsPerTask: "Średnia SP/zadanie",
+                avgCompletionDays: "Średni Czas Realizacji (dni)"
             }
         };
 
@@ -1935,6 +1978,8 @@
             renderVelocityChart();
             renderClosedIssuesChart();
             renderClosedByUserChart();
+            renderStoryPointsPerUserPeriodChart();
+            renderSpVsCompletionChart();
             renderUserStatsTable();
             renderUserRankings();
             renderIssuesTable();
@@ -2270,6 +2315,234 @@
             });
         }
 
+        // Render Story Points per User per Sprint/Month Chart
+        function renderStoryPointsPerUserPeriodChart() {
+            const ctx = document.getElementById('spPerUserPeriodChart').getContext('2d');
+
+            // Get only "Done" issues
+            const closedIssues = jiraData.filter(i => i.status === 'Done');
+
+            // Prepare periods based on view
+            let periods;
+            if (currentView === 'sprint') {
+                periods = sortSprints([...new Set(closedIssues.map(i => i.sprint))]);
+            } else {
+                periods = [...new Set(closedIssues.map(i => {
+                    const date = new Date(i.updated);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }))].sort();
+            }
+
+            const users = [...new Set(closedIssues.map(i => i.assignee))];
+
+            // Create datasets for each user (story points completed)
+            const datasets = users.map((user, idx) => {
+                const data = periods.map(period => {
+                    let periodData;
+                    if (currentView === 'sprint') {
+                        periodData = closedIssues.filter(i => i.sprint === period && i.assignee === user);
+                    } else {
+                        periodData = closedIssues.filter(i => {
+                            const date = new Date(i.updated);
+                            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                            return monthKey === period && i.assignee === user;
+                        });
+                    }
+                    return periodData.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+                });
+
+                const colors = [
+                    '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                    '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16'
+                ];
+
+                return {
+                    label: user,
+                    data: data,
+                    borderColor: colors[idx % colors.length],
+                    backgroundColor: colors[idx % colors.length] + '20',
+                    tension: 0.3,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                };
+            });
+
+            // Format period labels for display
+            const labels = periods.map(p => {
+                if (currentView === 'month') {
+                    const [year, month] = p.split('-');
+                    const date = new Date(year, parseInt(month) - 1);
+                    return date.toLocaleDateString('pl-PL', { year: 'numeric', month: 'short' });
+                }
+                return p;
+            });
+
+            if (charts.spPerUserPeriod) charts.spPerUserPeriod.destroy();
+
+            charts.spPerUserPeriod = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: t('storyPointsCompleted')
+                            },
+                            ticks: {
+                                stepSize: 5
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render Story Points vs Completion Time Analysis Chart
+        function renderSpVsCompletionChart() {
+            const ctx = document.getElementById('spVsCompletionChart').getContext('2d');
+
+            // Get only "Done" issues with valid dates and story points
+            const closedIssues = jiraData.filter(i =>
+                i.status === 'Done' &&
+                i.created &&
+                i.updated &&
+                i.storyPoints > 0
+            );
+
+            // Group by user
+            const users = [...new Set(closedIssues.map(i => i.assignee))];
+
+            const userStats = users.map(user => {
+                const userIssues = closedIssues.filter(i => i.assignee === user);
+
+                // Calculate average story points per task
+                const avgSP = userIssues.reduce((sum, i) => sum + i.storyPoints, 0) / userIssues.length;
+
+                // Calculate average completion time in days
+                const avgCompletionDays = userIssues.reduce((sum, i) => {
+                    const created = new Date(i.created);
+                    const completed = new Date(i.updated);
+                    const daysToComplete = (completed - created) / (1000 * 60 * 60 * 24);
+                    return sum + daysToComplete;
+                }, 0) / userIssues.length;
+
+                return {
+                    user: user,
+                    avgSP: avgSP,
+                    avgDays: avgCompletionDays,
+                    taskCount: userIssues.length
+                };
+            });
+
+            // Calculate team averages for reference lines
+            const teamAvgSP = userStats.reduce((sum, u) => sum + u.avgSP, 0) / userStats.length;
+            const teamAvgDays = userStats.reduce((sum, u) => sum + u.avgDays, 0) / userStats.length;
+
+            const colors = [
+                '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
+                '#EC4899', '#14B8A6', '#F97316', '#06B6D4', '#84CC16'
+            ];
+
+            if (charts.spVsCompletion) charts.spVsCompletion.destroy();
+
+            charts.spVsCompletion = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: userStats.map(u => u.user),
+                    datasets: [
+                        {
+                            label: t('avgStoryPointsPerTask'),
+                            data: userStats.map(u => u.avgSP),
+                            backgroundColor: colors.map((c, idx) => c + '80'),
+                            borderColor: colors,
+                            borderWidth: 2,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: t('avgCompletionDays'),
+                            data: userStats.map(u => u.avgDays),
+                            type: 'line',
+                            borderColor: '#DC2626',
+                            backgroundColor: '#DC262620',
+                            borderWidth: 3,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            yAxisID: 'y1',
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const index = context.dataIndex;
+                                    const stats = userStats[index];
+                                    return `${t('tasks')}: ${stats.taskCount}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: t('avgStoryPointsPerTask')
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: t('avgCompletionDays')
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         // Render Team Summary
         function renderTeamSummary() {
             const closedIssues = jiraData.filter(i => i.status === 'Done');
@@ -2563,6 +2836,16 @@
                 meta.hidden = !show;
             });
             charts.closedByUser.update();
+        }
+
+        function toggleAllUsersSpPerPeriod(show) {
+            if (!charts.spPerUserPeriod) return;
+
+            charts.spPerUserPeriod.data.datasets.forEach((dataset, index) => {
+                const meta = charts.spPerUserPeriod.getDatasetMeta(index);
+                meta.hidden = !show;
+            });
+            charts.spPerUserPeriod.update();
         }
 
         // Helper functions
